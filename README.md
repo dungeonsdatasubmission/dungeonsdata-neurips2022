@@ -1,18 +1,15 @@
 # Dungeon And Data
 
-Dataset Instructions and Tutorials for Submission to Neurips2022
+Dataset Instructions and Tutorials for Submission to NeurIPS2022 Datasets and Benchmarks Track
 
 ## License
 
-This data is licensed under the NetHack General Public License - based on the GPL-style BISON license. It is the license used for the game of NetHack, and can be found [here](https://github.com/facebookresearch/nle/blob/main/LICENSE)
+This data is licensed under the NetHack General Public License - based on the GPL-style BISON license. It is the license used for the game of NetHack, and can be found [here](https://github.com/facebookresearch/nle/blob/main/LICENSE).
 
 
 ## Accessing the Dataset
 
-The dataset is currently hosted on wetransfer with open access for reviewers, and will remain there for the duration of the review period. It will eventually move to its own hosting site, which is in the process of being set up. 
-
-For the time being, `NLD-AA` is one file, while `NLD-NAO` is in 5 parts (4 ttyrec zips + the xlogfiles).
-
+The dataset is currently hosted on wetransfer with open access for reviewers, and will remain there for the duration of the review period. It will eventually move to its own hosting site, which is in the process of being set up. For the time being, `NLD-AA` is one file, while `NLD-NAO` is in 5 parts (4 ttyrec zips + the xlogfiles).
 
 
 ### Download Links
