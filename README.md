@@ -9,7 +9,7 @@ This data is licensed under the NetHack General Public License - based on the GP
 
 ## Accessing the Dataset
 
-The dataset is currently hosted on wetransfer with open access for reviewers, and will remain there for the duration of the review period. It will eventually move to its own hosting site, which is in the process of being set up. For the time being, `NLD-AA` is one file, while `NLD-NAO` is in 5 parts (4 ttyrec zips + the xlogfiles).
+The dataset is currently hosted on WeTransfer with open access for all, and will remain there for the duration of the review period. It will eventually move to its own hosting site, which is in the process of being set up. For the time being, `NLD-AA` is one file, while `NLD-NAO` is in 5 parts (4 ttyrec zips + the xlogfiles).
 
 
 ### Download Links
