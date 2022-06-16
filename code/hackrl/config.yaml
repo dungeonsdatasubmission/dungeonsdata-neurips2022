@@ -1,0 +1,129 @@
+# Copyright (c) Facebook, Inc. and its affiliates.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+hydra:
+  job_logging:
+    formatters:
+      simple:
+        format: ${log_fmt}
+  run:
+    dir: "${localdir}"
+
+activation_function: relu
+actor_batch_size: 512
+add_image_observation: True
+adam_beta1: 0.9
+adam_beta2: 0.999
+adam_eps: 0.0000001
+adam_learning_rate: 0.0001
+appo_clip_policy: 0.1  # 'null' to disable clipping
+appo_clip_baseline: 1.0  # 'null' to disable clipping
+baseline_cost: 1
+batch_size: 256
+character: "@"
+checkpoint_interval: 600
+checkpoint_history_interval: 3600
+connect: 127.0.0.1:4431
+crop_dim: 18
+device: "cuda:0"
+discounting: 0.999
+entity: null
+entropy_cost: 0.001
+env:
+  name: challenge  # One of challenge, staircase, pet, eat, gold, score, scout, oracle.
+  max_episode_steps: 100000
+exp_point: point-A       # spare parameter, useful for wandb grouping
+exp_set: experiment-set  # spare parameter, useful for wandb grouping
+fixup_init: true
+fn_penalty_step: constant
+grad_norm_clipping: 4
+group: group2 
+learning_rate: 0.0002
+# Savedir is used for storing the checkpoint(s),
+# including flags and any global settings/stats for the training
+# localdir (which is a subdirectory of savedir) should be used
+# for storing logs and anything local to each instance
+localdir: "${savedir}/peers/${local_name}"
+local_name: "${uid:}"
+log_fmt: "[%(levelname)s:${local_name} %(process)d %(module)s:%(lineno)d %(asctime)s] %(message)s"
+log_interval: 20
+model: ChaoticDwarvenGPT5
+normalize_advantages: True
+normalize_reward: False
+num_actor_batches: 2
+num_actor_cpus: 10
+pixel_size: 6
+penalty_step: 0.0
+penalty_time: 0.0
+project: project
+rms_alpha: 0.99
+rms_epsilon: 0.000001
+rms_momentum: 0
+reward_clip: 10
+reward_scale: 1
+savedir: "/checkpoint/${env:USER}/hackrl/${project}/${group}"
+state_counter: none
+total_steps: 10_000_000_000
+unroll_length: 32
+use_bn: false
+use_lstm: true
+virtual_batch_size: 128
+wandb: true
+
+rms_reward_norm: true
+initialisation: 'orthogonal'
+use_global_advantage_norm: false
+
+baseline:
+  # Parameters for models/baseline.py
+  embedding_dim: 64
+  hidden_dim: 512
+  layers: 5
+  msg:
+    embedding_dim: 32
+    hidden_dim: 64
+  restrict_action_space: True  # Use a restricted ACTION SPACE (only nethack.USEFUL_ACTIONS)
+  use_index_select: False
+
+run_teacher_hs: False
+use_kickstarting: False
+kickstarting_loss: 1.0
+kickstarting_path: /checkpoint/ehambro/20220519/carmine-woodpecker/checkpoint_v102229.tar
+
+use_tty_only: true  # Use only tty observations. 'False' ~ 10% faster & higher score
+use_prev_action: true
+use_inverse_model: false
+use_inverse_model_only: false
+inverse_loss: 1
+augment_inverse_random: False
+random_inverse_loss: 2
+use_difference_vector: False
+use_resnet: False
+supervised_loss: 0
+
+dataset: autoascend
+dataset_demigod: False
+dataset_highscore: False
+dataset_midscore: False
+dataset_warmup: 0
+dataset_reset: 0
+dataset_bootstrap_actions: False
+dataset_bootstrap_path: /checkpoint/ehambro/saved_models/inverse-may30-dev/checkpoint.tar
+bootstrap_pred_max: False
+bootstrap_is_kl: False
+behavioural_clone: False
+ttyrec_batch_size: 512
+ttyrec_unroll_length: 32
+ttyrec_envpool_size: 4
+ttyrec_cpus: 10 
