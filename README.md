@@ -77,9 +77,13 @@ for i, mb in enumerate(dataset):
 for more instructions on usage see the accompanying tutorial notebook in this repo.
 
 
+## Replicating Experiments
+
+Code with a `README.md` on how to replicate experiments is available in the `experiment_code` directory.  This code was developed for use on an internal cluster, and will be tidied up and open sourced in NLE upon full release of the dataset.
+
 ## Troubleshooting
 
-If you are having issues laoding the dataset, ensure that the directory structure is as laid out in the docstrings to the `add_*_directory` functions.
+If you are having issues loading the dataset, ensure that the directory structure is as laid out in the docstrings to the `add_*_directory` functions.
 
 ``` python
 help(nld.add_nledata_directory) # will print docstring 
