@@ -1,0 +1,146 @@
+# Copyright (c) Facebook, Inc. and its affiliates.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+hydra:
+  job_logging:
+    formatters:
+      simple:
+        format: ${log_fmt}
+  run:
+    dir: "${localdir}"
+
+activation_function: relu
+actor_batch_size: 512
+add_image_observation: True
+adam_beta1: 0.9
+adam_beta2: 0.999
+adam_eps: 0.0000001
+adam_learning_rate: 0.0001 # 0.001 best for IQL; 0.0003 for CQL
+appo_clip_policy: 0.1  # 'null' to disable clipping
+appo_clip_baseline: 1.0  # 'null' to disable clipping
+baseline_cost: 1
+batch_size: 256
+character: "@"
+checkpoint_interval: 600
+checkpoint_history_interval: 3600
+connect: 127.0.0.1:4431
+crop_dim: 18   # 15, 12 was the best one !!!! with 18 I cannot reproduce the best results
+device: "cuda:0"
+discounting: 0.999
+entity: null
+entropy_cost: 0.001
+env:
+  name: challenge  # One of challenge, staircase, pet, eat, gold, score, scout, oracle.
+  max_episode_steps: 100000
+exp_point: point-A       # spare parameter, useful for wandb grouping
+exp_set: experiment-set  # spare parameter, useful for wandb grouping
+fixup_init: true
+fn_penalty_step: constant
+grad_norm_clipping: 4
+group: group2 
+learning_rate: 0.0002
+# Savedir is used for storing the checkpoint(s),
+# including flags and any global settings/stats for the training
+# localdir (which is a subdirectory of savedir) should be used
+# for storing logs and anything local to each instance
+localdir: "${savedir}/peers/${local_name}"
+local_name: "${uid:}"
+log_fmt: "[%(levelname)s:${local_name} %(process)d %(module)s:%(lineno)d %(asctime)s] %(message)s"
+log_interval: 20
+model: DQNChaoticDwarvenGPT5
+normalize_advantages: True
+normalize_reward: False
+num_actor_batches: 2
+num_actor_cpus: 20
+pixel_size: 6
+penalty_step: 0.0
+penalty_time: 0.0
+project: project
+rms_alpha: 0.99
+rms_epsilon: 0.000001
+rms_momentum: 0
+reward_clip: 10
+reward_scale: 1
+savedir: "/checkpoint/${env:USER}/hackrl/${project}/${group}"
+state_counter: none
+total_steps: 10_000_000_000
+unroll_length: 32
+use_bn: false
+use_lstm: true
+virtual_batch_size: 128
+wandb: true
+
+rms_reward_norm: true
+initialisation: 'orthogonal'
+use_global_advantage_norm: false
+
+baseline:
+  # Parameters for models/baseline.py
+  embedding_dim: 64
+  hidden_dim: 512
+  layers: 5
+  msg:
+    embedding_dim: 32
+    hidden_dim: 64
+  restrict_action_space: True  # Use a restricted ACTION SPACE (only nethack.USEFUL_ACTIONS)
+  use_index_select: False
+
+use_tty_only: true  # Use only tty observations. 'False' ~ 10% faster & higher score
+use_prev_action: true
+use_inverse_model: false
+inverse_loss: 0
+
+use_kickstarting: False
+kickstarting_loss: 1.0
+kickstarting_path: /checkpoint/ehambro/saved_models/offline-@/checkpoint.tar
+
+dataset_warmup: 0
+dataset_reset: 0
+behavioural_clone: False
+ttyrec_batch_size: 256 # 128 for CQL
+ttyrec_unroll_length: 32
+ttyrec_envpool_size: 4
+
+# Offline RL HPs
+
+# DQN HPs
+eps_start: 0.25      # 0.25 best so far -- higher is worse
+eps_end: 0.05
+eps_decay: 25_000     # 25000 best so far -- higher is worse
+target_update: 400   # 5000 for CQL 800 more stable -- doesn't seem to make a big difference
+dqn_loss: 'mse'      # mse or huber
+
+# Data HPs
+use_offline_data: True
+use_online_data: False
+
+ttyrec_loss_coef: 0.1  # CQL: 0.001 is best, maybe 1 and 0.1; DQN: 0.01; IQL 100, 10, 2
+
+# CQL HPs
+tau: 0.005        # CQL: 0.05 best, IQL: most values 0.005, 0.05, 0.1, 0.01 
+cql_loss_coef: 2.0
+
+# IQL HPs
+expectile: 0.8    # 0.7, 0.9; 0.8 is best
+temperature: 1.0  # 0.5, 3.0, 10.0; 10 is bad, 1 is best
+
+clip_logits: False
+
+actor_loss_coef: 1.0
+value_loss_coef: 1.0
+critic_loss_coef: 1.0
+
+algo: 'iql' # choose from dqn, cql, iql
+
+eval_mode: False

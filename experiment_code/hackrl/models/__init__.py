@@ -19,20 +19,23 @@ from omegaconf import OmegaConf
 from ..tasks import ENVS
 from .baseline import BaselineNet
 from .chaotic_dwarf import ChaoticDwarvenGPT5
+from .offline_chaotic_dwarf import DQNChaoticDwarvenGPT5, IQLChaoticDwarvenGPT5 
 from .inverse_model import BigInverseOnlyModel
 from .kickstarter import KickStarter
-from .tty_v1 import TtyV1
-from .tty_v2 import TtyV2
-from .tty_v3 import TtyV3
+from .dqn import DQN
+from .cql import CQL
+from .iql import IQL
 
 MODELS = [
     BaselineNet,
     ChaoticDwarvenGPT5,
-    TtyV1,
-    TtyV2,
-    TtyV3,
     KickStarter,
-    BigInverseOnlyModel,
+    BigInverseOnlyModel,    
+    DQNChaoticDwarvenGPT5, 
+    IQLChaoticDwarvenGPT5, 
+    DQN, 
+    CQL, 
+    IQL    
 ]
 MODELS_LOOKUP = {c.__name__: c for c in MODELS}
 

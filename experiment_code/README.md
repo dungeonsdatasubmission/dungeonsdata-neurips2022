@@ -23,7 +23,7 @@ pip install git+https://github.com/facebookresearch/nle.git@main
 
 # Get this repo.
 git clone --recursive git+https://github.com/dungeonsdatasubmission/dungeonsdata-neurips2022.git 
-cd dungeonsdata-neurips2022/experiment_code
+cd dungeonsdata-neurips2022/code
 
 # install render_utils, hackrl 
 pip install -r requirements.txt
