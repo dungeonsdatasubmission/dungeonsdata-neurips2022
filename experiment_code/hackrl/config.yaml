@@ -34,7 +34,7 @@ batch_size: 256
 character: "@"
 checkpoint_interval: 600
 checkpoint_history_interval: 3600
-connect: 127.0.0.1:4431
+connect: 0.0.0.0:4431
 crop_dim: 18
 device: "cuda:0"
 discounting: 0.999
@@ -72,7 +72,7 @@ rms_epsilon: 0.000001
 rms_momentum: 0
 reward_clip: 10
 reward_scale: 1
-savedir: "/checkpoint/${env:USER}/hackrl/${project}/${group}"
+savedir: "checkpoint/hackrl/${project}/${group}"
 state_counter: none
 total_steps: 10_000_000_000
 unroll_length: 32
