@@ -1,7 +1,8 @@
 cmake_minimum_required(VERSION 3.4...3.18)
 project(render_utils VERSION 0.0.1)
 
-add_subdirectory(third_party/pybind11)
+find_package(pybind11 REQUIRED)
+include_directories(${pybind11_INCLUDE_DIR})
 
 pybind11_add_module(render_utils src/main.cpp)
 
