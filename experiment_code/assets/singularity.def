@@ -17,7 +17,7 @@ From: continuumio/miniconda3
     apt-get -y update -q
     apt-get -y install git ffmpeg python3-pip curl libgl1-mesa-dev libgl1-mesa-glx \
         libglew-dev libosmesa6-dev libbz2-dev libclang-dev software-properties-common net-tools unzip vim \
-        wget xpra xserver-xorg-dev git virtualenv
+        wget xpra xserver-xorg-dev git virtualenv tmux
 
     # NLE dependencies
     apt-get install -y build-essential autoconf libtool pkg-config \
@@ -40,12 +40,18 @@ From: continuumio/miniconda3
     
     conda install pytorch torchvision torchaudio pytorch-cuda=11.7 -c pytorch -c nvidia
     conda install cmake
+    conda install pybind11 -c conda-forge
     conda install cudnn
-    pip install git+https://github.com/facebookresearch/moolib
+    pip install tqdm
+    pip install debugpy
+    pip install git+https://github.com/facebookresearch/moolib@e8b2de7ac5df3a9b3ee2548a33f61100a95152ef
     pip install nle==0.9.0
-    pip install -r requirements.txt && pip install -e .
-    # pip install -e .
+    pip install -r requirements.txt 
+
+    pybind11_INCLUDE_DIR=/opt/conda/envs/dungeons/share/cmake/pybind11
     cd render_utils && pip install -e . && cd ..
+    
+    pip install -e .
 
     # # pip install --pre -e .[data,mrunner] --extra-index-url https://download.pytorch.org/whl/nightly/cu116
 
