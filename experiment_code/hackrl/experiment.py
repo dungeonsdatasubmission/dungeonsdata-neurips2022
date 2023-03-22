@@ -209,11 +209,11 @@ class TtyrecEnvPool:
 
 
 def make_ttyrec_envpool(threadpool, flags):
-    dbfilename = "/private/home/ehambro/fair/workspaces/clean_rl/ttyrecs.db"
+    dbfilename = "/nle/ttyrecs.db"
 
     if not os.path.isfile(dbfilename):
-        alt_path = "/scratch/ehambro/altorg/altorg/111720"
-        aa_path = "/private/home/ehambro/fair/workspaces/autoascend-submission/nle_data"
+        alt_path = "/nle/nld-nao"
+        aa_path = "/nle/nld-aa/nle_data"
         db.create(dbfilename)
         populate_db.add_nledata_directory(aa_path, "autoascend", dbfilename)
         populate_db.add_altorg_directory(alt_path, "altorg", dbfilename)

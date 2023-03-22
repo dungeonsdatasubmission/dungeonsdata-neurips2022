@@ -1,15 +1,19 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
-#SBATCH --job-name=NetHackRL
-#SBATCH --output=logger-%j.txt
-#SBATCH --nodes=1
-#SBATCH --ntasks=1
-#SBATCH --cpus-per-task=10
-#SBATCH --mem-per-cpu=8G
-#SBATCH --gres=gpu:1
-#SBATCH --qos=big  # test (1 GPU, 1 hour), quick (1 GPU, 1 day), normal (2 GPU, 2 days), big (4 GPU, 7 days)
-#SBATCH --partition=dgxa100  # dgxa100 (mini-servers), dgxteam (dgx1 for Team-Net), dgxmatinf (dgx2 for WMiI), dgx (dgx1 and dgx2)
+#SBATCH -o logger-%j.txt
+#SBATCH --gres gpu:1  
+#SBATCH --nodes 1
+#SBATCH --mem=20G
+#SBATCH -c 20
+#SBATCH -t 2880
+#SBATCH -A plgmodernclgpu-gpu
+#SBATCH -p plgrid-gpu-v100
 
-#squeue -u ${USER} --Format "JobID:.6 ,Partition:.4 ,Name:.10 ,StateCompact:.2 ,TimeUsed:.11 ,Qos:.7 ,TimeLeft:.11 ,ReasonList:.16 ,Command:.40"
 
-singularity exec --nv /shared/results/z1188643/dungeons/dungeons.sif ./train.sh
+set -e
+
+
+module load cuda/11.6.0
+export PYTHONPATH=$PYTHONPATH:.
+
+singularity exec --nv -H $PWD:/homeplaceholder --env WANDB_API_KEY=d2f9309c1cee36dc7ad726c57e4eba04974d9914 --env WANDBPWD=$PWD -B /net/ascratch/people/plgbartekcupial/nle:/nle -B $TMPDIR:/tmp /net/ascratch/people/plgbartekcupial/nle/dungeons.sif ./train.sh

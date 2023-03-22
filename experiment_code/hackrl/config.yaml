@@ -38,7 +38,7 @@ connect: 0.0.0.0:4431
 crop_dim: 18
 device: "cuda:0"
 discounting: 0.999
-entity: null
+entity: gmum
 entropy_cost: 0.001
 env:
   name: challenge  # One of challenge, staircase, pet, eat, gold, score, scout, oracle.
@@ -66,7 +66,7 @@ num_actor_cpus: 10
 pixel_size: 6
 penalty_step: 0.0
 penalty_time: 0.0
-project: project
+project: nle
 rms_alpha: 0.99
 rms_epsilon: 0.000001
 rms_momentum: 0
