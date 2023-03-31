@@ -1,0 +1,1 @@
+python -c 'import moolib; rpc = moolib.Rpc(); train_id="train_id"; rpc_group = moolib.Group(rpc, name=train_id); rpc_group.all_reduce()'
