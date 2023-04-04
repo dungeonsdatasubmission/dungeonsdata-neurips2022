@@ -132,8 +132,8 @@ class TtyrecEnvPool:
                         "done": mb_tensors["done"].bool(),
                     }
 
-                    if "actions" in mb_tensors:
-                        actions = mb_tensors["actions"].long().to(self.device)
+                    if "keypresses" in mb_tensors:
+                        actions = mb_tensors["keypresses"].long().to(self.device)
                         actions_converted = (
                             self.embed_actions(actions).squeeze(-1).long()
                         )
@@ -209,14 +209,14 @@ class TtyrecEnvPool:
 
 
 def make_ttyrec_envpool(threadpool, flags):
-    dbfilename = "/nle/ttyrecs.db"
+    dbfilename = "./ttyrecs.db"
 
     if not os.path.isfile(dbfilename):
         alt_path = "/nle/nld-nao"
         aa_path = "/nle/nld-aa/nle_data"
         db.create(dbfilename)
         populate_db.add_nledata_directory(aa_path, "autoascend", dbfilename)
-        populate_db.add_altorg_directory(alt_path, "altorg", dbfilename)
+        # populate_db.add_altorg_directory(alt_path, "altorg", dbfilename)
 
     kwargs = dict(
         batch_size=flags.ttyrec_batch_size,
