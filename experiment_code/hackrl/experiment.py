@@ -429,7 +429,7 @@ class GlobalStatsAccumulator:
             self.queued_global_stats = None
             # Additional copy to deal with potential partial reductions.
             self.reduce_future = self.rpc_group.all_reduce(
-                "global stats", copy.deepcopy(self.sent_global_stats), self.add_stats
+                "global stats", copy.deepcopy(self.sent_global_stats), op=self.add_stats
             )
 
     def reset(self):
