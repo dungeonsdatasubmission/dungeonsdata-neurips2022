@@ -7,6 +7,39 @@ Dataset Instructions and Tutorials for Submission to NeurIPS2022 Datasets and Be
 This data is licensed under the NetHack General Public License - based on the GPL-style BISON license. It is the license used for the game of NetHack, and can be found [here](https://github.com/facebookresearch/nle/blob/main/LICENSE).
 
 
+## Installation
+
+Inspired with nle installation. Other dependencies can be installed by doing:
+
+```bash
+apt-get -y install git build-essential ffmpeg python3-pip \ python3-dev  python3-numpy curl libgl1-mesa-dev libgl1-mesa-glx autoconf libtool pkg-config libglew-dev libosmesa6-dev libbz2-dev libclang-dev software-properties-common net-tools unzip vim wget xpra xserver-xorg-dev virtualenv tmux make gcc g++
+```
+
+We advise using a conda environment or a singularity image. Singularity definition can be found in `experiment_code/assets`. Setting up with conda can be done by.
+
+```bash
+cd experiment_code
+
+conda create -y -n dungeons python=3.9
+conda activate dungeons
+
+conda install pytorch torchvision torchaudio pytorch-cuda=11.8 -c pytorch -c nvidia
+conda install cmake flex bison
+conda install pybind11 -c conda-forge
+conda install cudnn
+
+pip install tqdm debugpy
+pip install git+https://github.com/facebookresearch/moolib
+pip install git+https://github.com/facebookresearch/nle
+pip install -r requirements.txt 
+
+pybind11_INCLUDE_DIR=$(dirname $(dirname $(which conda)))/envs/dungeons/share/cmake/pybind11
+
+cd render_utils && pip install -e . && cd ..
+
+pip install -e .
+```
+
 ## Accessing the Dataset
 
 The dataset is currently hosted on WeTransfer with open access for all, and will remain there for the duration of the review period. It will eventually move to its own dedicated hosting site, which is in the process of being set up. For the time being, `NLD-AA` is one file, while `NLD-NAO` is in 5 parts (4 ttyrec zips + the xlogfiles).
