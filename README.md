@@ -112,7 +112,60 @@ for more instructions on usage see the accompanying tutorial notebook in this re
 
 ## Replicating Experiments
 
-Code with a `README.md` on how to replicate experiments is available in the `experiment_code` directory.  This code was developed for use on an internal cluster, and will be tidied up and open sourced in NLE upon full release of the dataset.
+Arguments used for replicating different experiments (from authors) can be found in `experiment_code/runs.sh`. To examine if setup is done correctly and everything works I recommend running APPO from scratch with Human Monk.
+
+```bash
+python scripts/sbatch_experiment.py --broker $BROKER_IP:$BROKER_PORT --time=4320 --constraint=volta32gb --cpus=20 exp_set=2G num_actor_cpus=20 exp_point=monk-APPO  total_steps=2_000_000_000 character='mon-hum-neu-mal'
+```
+
+### Running experiment with conda (or inside singularity shell)
+
+If you want to run this experiment locally (conda) you can run `experiment_code/train.sh` or simply:
+
+```bash
+export BROKER_IP=0.0.0.0
+export BROKER_PORT=4431
+
+python -m moolib.broker &
+
+python -m hackrl.experiment connect=$BROKER_IP:$BROKER_PORT exp_set=2G num_actor_cpus=20 exp_point=monk-APPO  total_steps=2_000_000_000 character='mon-hum-neu-mal' group='monk-APPO'
+```
+
+### Running debugging session
+
+If you want to start a debugging session (vscode) I recommend doing it with debugpy.
+
+```bash
+export BROKER_IP=0.0.0.0
+export BROKER_PORT=4431
+
+python -m moolib.broker &
+
+python -m debugpy --wait-for-client --listen 5678 ./hackrl/experiment.py connect=$BROKER_IP:$BROKER_PORT exp_set=2G num_actor_cpus=20 exp_point=monk-APPO  total_steps=2_000_000_000 character='mon-hum-neu-mal' group='monk-APPO'
+```
+
+And to connect your client you need to add to launch.json 
+```bash
+    {
+        "name": "Python: Attach",
+        "type": "python",
+        "request": "attach",
+        "connect": {
+            "host": "localhost",
+            "port": 5678
+        },
+        "justMyCode": false,
+    }
+```
+
+### Using sbatch command
+
+I recommend using pure sbatch and singularity image for running experiments. 
+Example:
+
+```bash
+sbatch run_ares.sh
+```
 
 ## Troubleshooting
 
