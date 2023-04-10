@@ -12,14 +12,28 @@
 
 #squeue -u ${USER} --Format "JobID:.6 ,Partition:.4 ,Name:.10 ,StateCompact:.2 ,TimeUsed:.11 ,Qos:.7 ,TimeLeft:.11 ,ReasonList:.16 ,Command:.40"
 
+# linking libraries enable running on arbitrary servers
 singularity exec --nv \
     -H /home/z1188643/dungeonsdata-neurips2022/experiment_code \
     --env WANDB_API_KEY=d2f9309c1cee36dc7ad726c57e4eba04974d9914 \
     --env WANDBPWD=$PWD \
     -B /shared/results/z1188643/dungeons/nle:/nle \
     -B $TMPDIR:/tmp \
+    --bind /usr/lib/x86_64-linux-gnu/libGL.so.1:/usr/lib/x86_64-linux-gnu/libGL.so.1 \
+    --bind /usr/lib/x86_64-linux-gnu/libGLdispatch.so.0:/usr/lib/x86_64-linux-gnu/libGLdispatch.so.0 \
+    --bind /usr/lib/x86_64-linux-gnu/libGLX.so.0:/usr/lib/x86_64-linux-gnu/libGLX.so.0 \
     /shared/results/z1188643/dungeons/dungeons.sif \
     ./train.sh
 
 
-# singularity shell --nv -H /home/z1188643/dungeonsdata-neurips2022/experiment_code --env WANDB_API_KEY=d2f9309c1cee36dc7ad726c57e4eba04974d9914 --env WANDBPWD=$PWD -B /shared/results/z1188643/dungeons/nle:/nle -B $TMPDIR:/tmp /shared/results/z1188643/dungeons/dungeons.sif 
+# singularity shell --nv \
+#     -H /home/z1188643/dungeonsdata-neurips2022/experiment_code \
+#     --env WANDB_API_KEY=d2f9309c1cee36dc7ad726c57e4eba04974d9914 \
+#     --env WANDBPWD=$PWD \
+#     -B /shared/results/z1188643/dungeons/nle:/nle \
+#     -B $TMPDIR:/tmp \
+#     --bind /usr/lib/x86_64-linux-gnu/libGL.so.1:/usr/lib/x86_64-linux-gnu/libGL.so.1 \
+#     --bind /usr/lib/x86_64-linux-gnu/libGLdispatch.so.0:/usr/lib/x86_64-linux-gnu/libGLdispatch.so.0 \
+#     --bind /usr/lib/x86_64-linux-gnu/libGLX.so.0:/usr/lib/x86_64-linux-gnu/libGLX.so.0 \
+#     /shared/results/z1188643/dungeons/dungeons.sif
+
