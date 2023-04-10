@@ -10,4 +10,11 @@
 #SBATCH -p plgrid-gpu-a100
 
 
-singularity exec --nv -H $PWD:/homeplaceholder --env WANDB_API_KEY=d2f9309c1cee36dc7ad726c57e4eba04974d9914 --env WANDBPWD=$PWD -B /net/pr2/projects/plgrid/plgggmum_crl/bcupial/nle:/nle -B $TMPDIR:/tmp /net/pr2/projects/plgrid/plgggmum_crl/bcupial/dungeons.sif ./train.sh
+singularity exec --nv \
+    -H /net/people/plgrid/plgbartekcupial/dungeonsdata-neurips2022/experiment_code \
+    --env WANDB_API_KEY=d2f9309c1cee36dc7ad726c57e4eba04974d9914 \
+    --env WANDBPWD=$PWD \
+    -B /net/pr2/projects/plgrid/plgggmum_crl/bcupial/nle:/nle \
+    -B $TMPDIR:/tmp \
+    /net/pr2/projects/plgrid/plgggmum_crl/bcupial/dungeons.sif \
+    ./train.sh

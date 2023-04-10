@@ -3,6 +3,7 @@ outputs/
 wandb/
 latest
 ttyrecs/ttyrecs.db
+checkpoint
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
