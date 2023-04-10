@@ -4,6 +4,7 @@ wandb/
 latest
 ttyrecs/ttyrecs.db
 checkpoint
+/.vscode/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
