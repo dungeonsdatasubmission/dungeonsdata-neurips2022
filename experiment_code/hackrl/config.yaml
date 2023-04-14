@@ -61,7 +61,12 @@ localdir: "${savedir}/peers/${local_name}"
 local_name: "${uid:}"
 log_fmt: "[%(levelname)s:${local_name} %(process)d %(module)s:%(lineno)d %(asctime)s] %(message)s"
 log_interval: 20
-model: ChaoticDwarvenGPT5
+# model: ChaoticDwarvenGPT5
+model: DecisionTransformer
+dropout: 0.1
+n_layer: 3
+n_head: 1
+
 normalize_advantages: True
 normalize_reward: False
 num_actor_batches: 2
@@ -109,6 +114,9 @@ use_tty_only: true  # Use only tty observations. 'False' ~ 10% faster & higher s
 use_prev_action: true
 use_inverse_model: false
 use_inverse_model_only: false
+use_actions: false
+use_returns: true
+scale: 100000
 inverse_loss: 1
 augment_inverse_random: False
 random_inverse_loss: 2

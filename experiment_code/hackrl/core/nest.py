@@ -36,3 +36,8 @@ def map_many(f, *nests):
         return f([first] + [next(i) for i in iters])
 
     return map(g, n0)
+
+
+def slice(nest, idx, elem):
+    for key in nest.keys():
+        nest[key][idx] = elem[key]
