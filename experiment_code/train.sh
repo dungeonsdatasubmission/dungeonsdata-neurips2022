@@ -26,3 +26,4 @@ python -m moolib.broker &
 
 # APPO +  Kickstarting Experiments
 # python -m hackrl.experiment connect=$BROKER_IP:$BROKER_PORT exp_set=2G exp_point=monk-APPO-AA-KS total_steps=2_000_000_000 num_actor_cpus=20 kickstarting_loss=0.1 use_kickstarting=true kickstarting_path=/net/pr2/projects/plgrid/plgggmum_crl/bcupial/monk-AA-BC/checkpoint_v60242.tar  character='mon-hum-neu-mal' group='monk-APPO-AA-KS'
+# python -m hackrl.experiment connect=$BROKER_IP:$BROKER_PORT exp_set=2G exp_point=monk-APPO-AA-KS total_steps=2_000_000_000 num_actor_cpus=20 kickstarting_loss=0.1 use_kickstarting=true kickstarting_path=/home/z1188643/dungeonsdata-neurips2022/experiment_code/checkpoint/hackrl/nle/monk-APPO-AA-BC-completed/checkpoint_v482821.tar  character='mon-hum-neu-mal' group='monk-APPO-AA-KS'
