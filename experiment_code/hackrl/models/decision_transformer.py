@@ -25,7 +25,9 @@ class DecisionTransformer(ChaoticDwarvenGPT5):
         self.max_length = flags.ttyrec_unroll_length
         self.use_returns = flags.use_returns
         self.use_actions = flags.use_actions
-        self.scale = flags.scale
+        self.return_to_go = flags.return_to_go
+        self.score_scale = flags.score_scale
+        self.use_timesteps = flags.use_timesteps
 
         self.n = 1 + self.use_actions * 1 + self.use_returns * 1
 
@@ -63,14 +65,14 @@ class DecisionTransformer(ChaoticDwarvenGPT5):
             blstats=torch.zeros(self.max_length, batch_size, 27).to(torch.long),
             done=torch.zeros(self.max_length, batch_size).to(torch.bool),
             message=torch.zeros(self.max_length, batch_size, 256).to(torch.uint8),
-            reward=torch.zeros(self.max_length, batch_size),
             screen_image=torch.zeros(self.max_length, batch_size, 3, 108, 108).to(torch.uint8),
             tty_chars=torch.zeros(self.max_length, batch_size, 24, 80).to(torch.uint8),
             tty_colors=torch.zeros(self.max_length, batch_size, 24, 80).to(torch.int8),
             tty_cursor=torch.zeros(self.max_length, batch_size, 2).to(torch.uint8),
             prev_action=torch.zeros(self.max_length, batch_size).to(torch.long),
             timesteps=torch.zeros(self.max_length, batch_size),
-            max_scores=torch.zeros(self.max_length, batch_size).to(torch.long),
+            scores=torch.zeros(self.max_length, batch_size),
+            max_scores=torch.zeros(self.max_length, batch_size),
             mask=torch.zeros(self.max_length, batch_size).to(torch.bool),
         )
 
@@ -116,15 +118,24 @@ class DecisionTransformer(ChaoticDwarvenGPT5):
                 ).view(T * B, -1)
             )
         if self.use_returns:
-            st.append(inputs["max_scores"].T.reshape(T * B, -1) / self.scale)
+            if self.return_to_go:
+                target_score = (inputs["max_scores"] - inputs["scores"])
+            else:
+                target_score = inputs["max_scores"]
+            st.append(target_score.T.reshape(T * B, -1) / self.score_scale)
 
         st = torch.cat(st, dim=1)
         core_input = st.view(B, T, -1)
         inputs_embeds = self.embed_input(core_input) 
 
-        timesteps = inputs["timesteps"].permute(1, 0).unsqueeze(-1) / self.scale
-        time_embeddings = self.embed_timestep(timesteps)
-        inputs_embeds = inputs_embeds + time_embeddings
+        if self.use_timesteps:
+            timesteps = inputs["timesteps"].permute(1, 0).unsqueeze(-1) / self.flags.env.max_episode_steps
+            time_embeddings = self.embed_timestep(timesteps)
+            inputs_embeds = inputs_embeds + time_embeddings
+        else:
+            timesteps = torch.arange(T, device=inputs["mask"].device).view(1, -1, 1).repeat(B, 1, 1).float()
+            time_embeddings = self.embed_timestep(timesteps)
+            inputs_embeds = inputs_embeds + time_embeddings
 
         inputs_embeds = self.embed_ln(inputs_embeds)
 

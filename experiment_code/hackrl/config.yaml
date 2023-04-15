@@ -61,8 +61,8 @@ localdir: "${savedir}/peers/${local_name}"
 local_name: "${uid:}"
 log_fmt: "[%(levelname)s:${local_name} %(process)d %(module)s:%(lineno)d %(asctime)s] %(message)s"
 log_interval: 20
-# model: ChaoticDwarvenGPT5
-model: DecisionTransformer
+model: ChaoticDwarvenGPT5
+# model: DecisionTransformer
 dropout: 0.1
 n_layer: 3
 n_head: 1
@@ -116,7 +116,10 @@ use_inverse_model: false
 use_inverse_model_only: false
 use_actions: false
 use_returns: true
-scale: 100000
+use_timesteps: true
+return_to_go: true
+score_scale: 100000
+max_score_target: true
 inverse_loss: 1
 augment_inverse_random: False
 random_inverse_loss: 2

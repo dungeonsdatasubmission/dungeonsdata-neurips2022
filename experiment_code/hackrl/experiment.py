@@ -143,7 +143,7 @@ class TtyrecEnvPool:
                         "screen_image": mb_tensors["screen_image"],
                         "done": mb_tensors["done"].bool(),
                         "timesteps": mb_tensors["timestamps"].float(),
-                        "max_scores": max_scores[mb["gameids"]],
+                        "max_scores": max_scores[mb["gameids"].flatten()].reshape(mb["gameids"].shape).float(),
                         "mask": torch.ones_like(mb_tensors["timestamps"]).bool()
                     }
 
@@ -152,7 +152,7 @@ class TtyrecEnvPool:
                         actions_converted = (
                             self.embed_actions(actions).squeeze(-1).long()
                         )
-                        final_mb["score"] = mb_tensors["scores"]
+                        final_mb["scores"] = mb_tensors["scores"].float()
                         final_mb["actions_converted"] = actions_converted
                         final_mb["prev_action"] = torch.cat(
                             [prev_action, actions_converted[:, :-1]], dim=1
@@ -470,7 +470,7 @@ class EnvBatchState:
         self.initial_core_state = self.core_state
         self.discount = flags.discounting
 
-        self.running_reward = torch.zeros(batch_size)
+        self.running_reward = torch.zeros(batch_size).to(device)
         self.discounted_running_reward = torch.zeros(batch_size)
         self.step_count = torch.zeros(batch_size)
 
@@ -478,7 +478,7 @@ class EnvBatchState:
 
     def update(self, env_outputs, action, stats):
         self.prev_action = action
-        self.running_reward += env_outputs["reward"]
+        self.running_reward += env_outputs["reward"].to(self.device)
         self.discounted_running_reward *= self.discount
         self.discounted_running_reward += env_outputs["reward"]
         self.step_count += 1
@@ -486,7 +486,7 @@ class EnvBatchState:
 
         done = env_outputs["done"]
 
-        episode_return = self.running_reward * done
+        episode_return = self.running_reward.cpu() * done
         episode_step = self.step_count * done
         episodes_done = done.sum().item()
 
@@ -496,7 +496,7 @@ class EnvBatchState:
         stats["steps_done"] += done.numel()
         stats["episodes_done"] += episodes_done
 
-        stats["running_reward"] += self.running_reward.mean().item()
+        stats["running_reward"] += self.running_reward.cpu().mean().item()
         stats["running_step"] += self.step_count.mean().item()
 
         stats["mean_square_discounted_running_reward"] += (
@@ -505,7 +505,7 @@ class EnvBatchState:
         not_done = ~done
 
         self.discounted_running_reward *= not_done
-        self.running_reward *= not_done
+        self.running_reward *= not_done.to(self.device)
         self.step_count *= not_done
         self.timesteps *= not_done.to(self.device)
 
@@ -1022,7 +1022,11 @@ def main(cfg):
             TTYREC_HIDDEN_STATE.append(hs)
         TTYREC_ENVPOOL = make_ttyrec_envpool(tp, FLAGS)
 
-        score_target = max(TTYREC_ENVPOOL.dataset_scores.values())
+        # different strategies for score target
+        if FLAGS.max_score_target:
+            score_target = np.max(list(TTYREC_ENVPOOL.dataset_scores.values()))
+        else:
+            score_target = np.mean(list(TTYREC_ENVPOOL.dataset_scores.values())) * 2
     else:
         score_target = 100000
 
@@ -1158,8 +1162,9 @@ def main(cfg):
 
             env_outputs["prev_action"] = env_state.prev_action
             env_outputs["timesteps"] = env_state.timesteps
-            env_outputs["max_scores"] = torch.ones_like(env_state.timesteps) * score_target #TODO: scale? 100k is a big number
+            env_outputs["max_scores"] = (torch.ones_like(env_state.timesteps) * score_target).float()
             env_outputs["mask"] = torch.ones_like(env_state.timesteps).to(torch.bool)
+            env_outputs["scores"] = env_state.running_reward
             prev_core_state = env_state.core_state
             model.eval()
             with torch.no_grad():
