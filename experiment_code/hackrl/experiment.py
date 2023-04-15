@@ -26,6 +26,9 @@ from nle.dataset import populate_db
 
 import hackrl.environment
 import hackrl.models
+
+from hackrl.utils.dataset_scores import get_dataset_scores
+
 import render_utils
 from hackrl.core import nest
 from hackrl.core import record
@@ -38,12 +41,13 @@ TTYREC_ENVPOOL = None
 
 
 class TtyrecEnvPool:
-    def __init__(self, flags, **dataset_kwargs):
+    def __init__(self, flags, dataset_scores, **dataset_kwargs):
         self.idx = 0
         self.env_pool_size = flags.ttyrec_envpool_size
         self.dataset = dataset.TtyrecDataset(flags.dataset, **dataset_kwargs)
         self.dataset.shuffle = True
         self.threadpool = dataset_kwargs["threadpool"]
+        self.dataset_scores = dataset_scores
 
         env = hackrl.environment.create_env(flags)
         obs = env.reset()
@@ -218,6 +222,8 @@ def make_ttyrec_envpool(threadpool, flags):
         populate_db.add_nledata_directory(aa_path, "autoascend", dbfilename)
         # populate_db.add_altorg_directory(alt_path, "altorg", dbfilename)
 
+    dataset_scores = get_dataset_scores(flags.dataset, dbfilename)
+
     kwargs = dict(
         batch_size=flags.ttyrec_batch_size,
         seq_length=flags.ttyrec_unroll_length,
@@ -225,6 +231,7 @@ def make_ttyrec_envpool(threadpool, flags):
         threadpool=threadpool,
         loop_forever=True,
         shuffle=True,
+        dataset_scores=dataset_scores,
     )
     subselect = []
     if flags.character == "mon-hum-neu-mal":
