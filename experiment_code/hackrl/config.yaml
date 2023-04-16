@@ -118,8 +118,10 @@ use_actions: false
 use_returns: true
 use_timesteps: true
 return_to_go: true
-score_scale: 100000
-max_score_target: true
+score_scale: 40000
+score_target_strategy: value # 'max', 'mean', 'percentile', 'value'
+score_target_percentile: 95
+score_target_value: 40000
 inverse_loss: 1
 augment_inverse_random: False
 random_inverse_loss: 2

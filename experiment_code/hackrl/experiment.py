@@ -1023,10 +1023,16 @@ def main(cfg):
         TTYREC_ENVPOOL = make_ttyrec_envpool(tp, FLAGS)
 
         # different strategies for score target
-        if FLAGS.max_score_target:
+        if FLAGS.score_target_strategy == "max":
             score_target = np.max(list(TTYREC_ENVPOOL.dataset_scores.values()))
+        elif FLAGS.score_target_strategy == "mean":
+            score_target = np.mean(list(TTYREC_ENVPOOL.dataset_scores.values())) 
+        elif FLAGS.score_target_strategy == "percentile":
+            score_target = np.percentile(list(TTYREC_ENVPOOL.dataset_scores.values()), q=FLAGS.score_target_percentile)
+        elif FLAGS.score_target_strategy == "value":
+            score_target = FLAGS.score_target_value
         else:
-            score_target = np.mean(list(TTYREC_ENVPOOL.dataset_scores.values())) * 2
+            raise NotImplementedError
     else:
         score_target = 100000
 
