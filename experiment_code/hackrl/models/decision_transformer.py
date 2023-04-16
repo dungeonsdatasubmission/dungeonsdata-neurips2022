@@ -15,10 +15,10 @@ class DecisionTransformer(ChaoticDwarvenGPT5):
 
     def __init__(
         self,
-        shape, 
-        action_space, 
-        flags, 
-        device, 
+        shape,
+        action_space,
+        flags,
+        device,
     ):
         super().__init__(shape, action_space, flags, device)
 
@@ -28,12 +28,23 @@ class DecisionTransformer(ChaoticDwarvenGPT5):
         self.return_to_go = flags.return_to_go
         self.score_scale = flags.score_scale
         self.use_timesteps = flags.use_timesteps
+        self.action_hidden_dim = flags.action_hidden_dim
+        self.return_hidden_dim = flags.return_hidden_dim
 
         self.n = 1 + self.use_actions * 1 + self.use_returns * 1
 
-        if self.use_returns:
-            self.h_dim += 1
+        self.h_dim = sum(
+            [
+                self.topline_encoder.hidden_dim,
+                self.bottomline_encoder.hidden_dim,
+                self.screen_encoder.hidden_dim,
+                self.action_hidden_dim if self.use_prev_action else 0,
+                self.return_hidden_dim if self.use_returns else 0,
+            ]
+        )
 
+        self.return_encoder = nn.Linear(1, self.return_hidden_dim)
+        self.action_encoder = nn.Embedding(self.num_actions, self.action_hidden_dim)
         self.embed_input = nn.Linear(self.h_dim, self.hidden_dim)
 
         kwargs = dict(
@@ -45,9 +56,7 @@ class DecisionTransformer(ChaoticDwarvenGPT5):
             attn_pdrop=flags.dropout,
         )
 
-        config = transformers.GPT2Config(
-            vocab_size=1, n_embd=self.hidden_dim, **kwargs  # doesn't matter -- we don't use the vocab
-        )
+        config = transformers.GPT2Config(vocab_size=1, n_embd=self.hidden_dim, **kwargs)
 
         # note: the only difference between this GPT2Model and the default Huggingface version
         # is that the positional embeddings are removed (since we'll add those ourselves)
@@ -58,7 +67,6 @@ class DecisionTransformer(ChaoticDwarvenGPT5):
         # self.embed_timestep = nn.Embedding(flags.env.max_episode_steps, self.hidden_dim)
         self.embed_timestep = nn.Linear(1, self.hidden_dim)
         self.embed_ln = nn.LayerNorm(self.hidden_dim)
-
 
     def initial_state(self, batch_size=1):
         return dict(
@@ -103,44 +111,64 @@ class DecisionTransformer(ChaoticDwarvenGPT5):
                 topline.float(memory_format=torch.contiguous_format).reshape(T * B, -1)
             ),
             self.bottomline_encoder(
-                bottom_line.float(memory_format=torch.contiguous_format).reshape(T * B, -1)
+                bottom_line.float(memory_format=torch.contiguous_format).reshape(
+                    T * B, -1
+                )
             ),
             self.screen_encoder(
-                inputs["screen_image"].permute(1, 0, 2, 3, 4)
+                inputs["screen_image"]
+                .permute(1, 0, 2, 3, 4)
                 .float(memory_format=torch.contiguous_format)
                 .reshape(T * B, C, H, W)
             ),
         ]
         if self.use_prev_action:
+            actions = inputs["prev_action"].permute(1, 0).float().long()
             st.append(
-                torch.nn.functional.one_hot(
-                    inputs["prev_action"].T, self.num_actions
-                ).view(T * B, -1)
+                self.action_encoder(
+                    actions
+                ).reshape(T * B, -1)
             )
         if self.use_returns:
             if self.return_to_go:
-                target_score = (inputs["max_scores"] - inputs["scores"])
+                target_score = inputs["max_scores"] - inputs["scores"]
             else:
                 target_score = inputs["max_scores"]
-            st.append(target_score.T.reshape(T * B, -1) / self.score_scale)
+            st.append(
+                self.return_encoder(
+                    target_score.T.reshape(T * B, -1) / self.score_scale
+                )
+            )
 
         st = torch.cat(st, dim=1)
         core_input = st.view(B, T, -1)
-        inputs_embeds = self.embed_input(core_input) 
+        inputs_embeds = self.embed_input(core_input)
 
         if self.use_timesteps:
-            timesteps = inputs["timesteps"].permute(1, 0).unsqueeze(-1) / self.flags.env.max_episode_steps
+            timesteps = (
+                inputs["timesteps"].permute(1, 0).unsqueeze(-1)
+                / self.flags.env.max_episode_steps
+            )
             time_embeddings = self.embed_timestep(timesteps)
             inputs_embeds = inputs_embeds + time_embeddings
         else:
-            timesteps = torch.arange(T, device=inputs["mask"].device).view(1, -1, 1).repeat(B, 1, 1).float()
+            timesteps = (
+                torch.arange(T, device=inputs["mask"].device)
+                .view(1, -1, 1)
+                .repeat(B, 1, 1)
+                .float()
+            )
             time_embeddings = self.embed_timestep(timesteps)
             inputs_embeds = inputs_embeds + time_embeddings
 
         inputs_embeds = self.embed_ln(inputs_embeds)
 
         attention_mask = inputs["mask"].T
-        causal_mask = torch.tril(torch.ones((B, T, T), dtype=torch.uint8)).view(B, 1, T, T).to(attention_mask.device)
+        causal_mask = (
+            torch.tril(torch.ones((B, T, T), dtype=torch.uint8))
+            .view(B, 1, T, T)
+            .to(attention_mask.device)
+        )
         if inputs["done"].any():
             # # for breakpoint
             # if "actions_converted" in org_inputs:
@@ -150,10 +178,10 @@ class DecisionTransformer(ChaoticDwarvenGPT5):
             mask = torch.ones_like(causal_mask)
             xs, ys = torch.where(inputs["done"].T)
             for x, y in zip(xs, ys):
-                mask[x] = 0 
-                mask[x, :, y:, y:] = 1 
-                mask[x, :, :y, :y] = 1 
-                
+                mask[x] = 0
+                mask[x, :, y:, y:] = 1
+                mask[x, :, :y, :y] = 1
+
                 # reset state if episode finished
                 init_state = self.initial_state()
                 init_state = nest.map(torch.squeeze, init_state)
@@ -196,65 +224,3 @@ class DecisionTransformer(ChaoticDwarvenGPT5):
             output["encoded_state"] = core_input
             output["inverse_action_logits"] = inverse_action_logits
         return (output, inputs)
-
-
-    def get_action(self, states, actions, rewards, returns_to_go, timesteps, **kwargs):
-        # we don't care about the past rewards in this model
-
-        states = states.reshape(1, -1, self.state_dim)
-        actions = actions.reshape(1, -1, self.act_dim)
-        returns_to_go = returns_to_go.reshape(1, -1, 1)
-        timesteps = timesteps.reshape(1, -1)
-
-        if self.max_length is not None:
-            states = states[:, -self.max_length :]
-            actions = actions[:, -self.max_length :]
-            returns_to_go = returns_to_go[:, -self.max_length :]
-            timesteps = timesteps[:, -self.max_length :]
-
-            # pad all tokens to sequence length
-            attention_mask = torch.cat([torch.zeros(self.max_length - states.shape[1]), torch.ones(states.shape[1])])
-            attention_mask = attention_mask.to(dtype=torch.long, device=states.device).reshape(1, -1)
-            states = torch.cat(
-                [
-                    torch.zeros(
-                        (states.shape[0], self.max_length - states.shape[1], self.state_dim), device=states.device
-                    ),
-                    states,
-                ],
-                dim=1,
-            ).to(dtype=torch.float32)
-            actions = torch.cat(
-                [
-                    torch.zeros(
-                        (actions.shape[0], self.max_length - actions.shape[1], self.act_dim), device=actions.device
-                    ),
-                    actions,
-                ],
-                dim=1,
-            ).to(dtype=torch.float32)
-            returns_to_go = torch.cat(
-                [
-                    torch.zeros(
-                        (returns_to_go.shape[0], self.max_length - returns_to_go.shape[1], 1),
-                        device=returns_to_go.device,
-                    ),
-                    returns_to_go,
-                ],
-                dim=1,
-            ).to(dtype=torch.float32)
-            timesteps = torch.cat(
-                [
-                    torch.zeros((timesteps.shape[0], self.max_length - timesteps.shape[1]), device=timesteps.device),
-                    timesteps,
-                ],
-                dim=1,
-            ).to(dtype=torch.long)
-        else:
-            attention_mask = None
-
-        _, action_preds, return_preds = self.forward(
-            states, actions, None, returns_to_go, timesteps, attention_mask=attention_mask, **kwargs
-        )
-
-        return action_preds[0, -1]
