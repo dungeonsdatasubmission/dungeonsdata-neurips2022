@@ -7,7 +7,7 @@ import torch.nn.functional as F
 
 from hackrl.core import nest
 from hackrl.models.trajectory_gpt2 import GPT2Model
-from hackrl.models.chaotic_dwarf import ChaoticDwarvenGPT5
+from hackrl.models.chaotic_dwarf import ChaoticDwarvenGPT5, ScreenEncoder, BottomLinesEncoder, TopLineEncoder
 
 
 class DecisionTransformer(ChaoticDwarvenGPT5):
@@ -67,6 +67,23 @@ class DecisionTransformer(ChaoticDwarvenGPT5):
         # self.embed_timestep = nn.Embedding(flags.env.max_episode_steps, self.hidden_dim)
         self.embed_timestep = nn.Linear(1, self.hidden_dim)
         self.embed_ln = nn.LayerNorm(self.hidden_dim)
+
+    def apply(self, fn):
+        for module in self.children():
+            # we want to skip GPT2Model because it has its own initialization
+            if isinstance(module, GPT2Model):
+                continue
+            # elif isinstance(module, torch.jit.RecursiveScriptModule) and module.original_name == TopLineEncoder.__name__:
+            elif isinstance(module, TopLineEncoder):
+                module.apply(partial(fn, gain=5.0))
+            elif isinstance(module, torch.jit.RecursiveScriptModule) and module.original_name == BottomLinesEncoder.__name__:
+                module.apply(partial(fn, gain=3.3))
+            elif isinstance(module, torch.jit.RecursiveScriptModule) and module.original_name == ScreenEncoder.__name__:
+                module.apply(partial(fn, gain=2.2))
+            else:
+                module.apply(fn)
+        fn(self)
+        return self
 
     def initial_state(self, batch_size=1):
         return dict(
