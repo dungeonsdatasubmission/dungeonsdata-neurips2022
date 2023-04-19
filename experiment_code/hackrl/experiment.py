@@ -213,14 +213,14 @@ class TtyrecEnvPool:
 
 
 def make_ttyrec_envpool(threadpool, flags):
-    dbfilename = "./ttyrecs/ttyrecs.db"
+    dbfilename = "/ttyrecs/ttyrecs.db"
 
     if not os.path.isfile(dbfilename):
         alt_path = "/nle/nld-nao"
         aa_path = "/nle/nld-aa/nle_data"
         db.create(dbfilename)
         populate_db.add_nledata_directory(aa_path, "autoascend", dbfilename)
-        # populate_db.add_altorg_directory(alt_path, "altorg", dbfilename)
+        populate_db.add_altorg_directory(alt_path, "altorg", dbfilename)
 
     dataset_scores = get_dataset_scores(flags.dataset, dbfilename)
 

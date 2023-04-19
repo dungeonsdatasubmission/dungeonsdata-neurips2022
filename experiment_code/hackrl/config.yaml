@@ -72,7 +72,7 @@ rms_epsilon: 0.000001
 rms_momentum: 0
 reward_clip: 10
 reward_scale: 1
-savedir: "checkpoint/hackrl/${project}/${group}"
+savedir: "/checkpoint/hackrl/${project}/${group}"
 state_counter: none
 total_steps: 10_000_000_000
 unroll_length: 32
