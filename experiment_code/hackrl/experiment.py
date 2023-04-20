@@ -213,7 +213,7 @@ class TtyrecEnvPool:
 
 
 def make_ttyrec_envpool(threadpool, flags):
-    dbfilename = "/ttyrecs/ttyrecs.db"
+    dbfilename = flags.dbfilename 
 
     if not os.path.isfile(dbfilename):
         alt_path = "/nle/nld-nao"

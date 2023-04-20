@@ -19,11 +19,12 @@ config = {
     "character": "mon-hum-neu-mal",
     'group': "monk-AA-BC",
     "connect":"0.0.0.0:4431",
+    "dbfilename": "/home/bartek/Workspace/data/nethack/AA-taster/ttyrecs.db",
 }
 
 
 # params different between exps
-params_grid = []
+params_grid = {}
 
 experiments_list = create_experiments_helper(
     experiment_name=name,
