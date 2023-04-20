@@ -53,6 +53,8 @@ From: nvidia/cuda:11.8.0-cudnn8-devel-ubuntu22.04
 
     pip install -q tqdm debugpy
     pip install -q nle
+    pip install -q git+https://gitlab.com/awarelab/mrunner.git
+    pip install -q neptune-client==0.16.17
 
     # install moolib
     cd /opt/
@@ -69,7 +71,17 @@ From: nvidia/cuda:11.8.0-cudnn8-devel-ubuntu22.04
     cd render_utils && pip install -e . && cd ..
     pip install -e .
 
-    # Test NLE and moolib.
+    # install my version of nle
+    cd /opt/
+    git clone --recursive https://github.com/BartekCupial/nle.git
+    cd /opt/nle
+    pip install -e .["dev"]
+
+    pip install -q transformers~=4.5.1
+    pip install -q packaging~=21.3
+
+    # Test transformers, NLE and moolib.
+    python -c 'import transformers'
     python -c 'import gym; import nle; env = gym.make("NetHackScore-v0"); env.reset()'
     python -c 'import moolib'
 
