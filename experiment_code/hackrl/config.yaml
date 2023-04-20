@@ -122,6 +122,7 @@ action_hidden_dim: 128
 return_hidden_dim: 128
 use_timesteps: true
 return_to_go: true
+linear_time_embeddings: true
 score_scale: 40000
 score_target_strategy: value # 'max', 'mean', 'percentile', 'value'
 score_target_percentile: 95

@@ -64,8 +64,11 @@ class DecisionTransformer(ChaoticDwarvenGPT5):
         self.core.hidden_size = self.hidden_dim
         self.core.num_layers = flags.n_layer
 
-        # self.embed_timestep = nn.Embedding(flags.env.max_episode_steps, self.hidden_dim)
-        self.embed_timestep = nn.Linear(1, self.hidden_dim)
+        self.linear_time_embeddings = flags.linear_time_embeddings
+        if self.linear_time_embeddings:
+            self.embed_timestep = nn.Linear(1, self.hidden_dim)
+        else:
+            self.embed_timestep = nn.Embedding(flags.env.max_episode_steps, self.hidden_dim)
         self.embed_ln = nn.LayerNorm(self.hidden_dim)
 
     def apply(self, fn):
@@ -162,21 +165,24 @@ class DecisionTransformer(ChaoticDwarvenGPT5):
         inputs_embeds = self.embed_input(core_input)
 
         if self.use_timesteps:
-            timesteps = (
-                inputs["timesteps"].permute(1, 0).unsqueeze(-1)
-                / self.flags.env.max_episode_steps
-            )
-            time_embeddings = self.embed_timestep(timesteps)
-            inputs_embeds = inputs_embeds + time_embeddings
+            timesteps = inputs["timesteps"].permute(1, 0).unsqueeze(-1)
+            if self.linear_time_embeddings:
+                timesteps = timesteps.float() / self.flags.env.max_episode_steps
+            else:
+                timesteps = timesteps.long().squeeze(-1)
         else:
             timesteps = (
                 torch.arange(T, device=inputs["mask"].device)
                 .view(1, -1, 1)
                 .repeat(B, 1, 1)
-                .float()
             )
-            time_embeddings = self.embed_timestep(timesteps)
-            inputs_embeds = inputs_embeds + time_embeddings
+            if self.linear_time_embeddings:
+                timesteps = timesteps.float()  
+            else:
+                timesteps = timesteps.long().squeeze(-1)
+
+        time_embeddings = self.embed_timestep(timesteps)
+        inputs_embeds = inputs_embeds + time_embeddings
 
         inputs_embeds = self.embed_ln(inputs_embeds)
 
