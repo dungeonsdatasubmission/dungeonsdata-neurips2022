@@ -64,6 +64,9 @@ class DecisionTransformer(ChaoticDwarvenGPT5):
         self.core.hidden_size = self.hidden_dim
         self.core.num_layers = flags.n_layer
 
+        self.policy = nn.Linear(self.hidden_dim, self.num_actions)
+        self.baseline = nn.Linear(self.hidden_dim, 1)
+
         self.linear_time_embeddings = flags.linear_time_embeddings
         if self.linear_time_embeddings:
             self.embed_timestep = nn.Linear(1, self.hidden_dim)
