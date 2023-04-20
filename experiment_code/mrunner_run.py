@@ -12,7 +12,7 @@ if __name__ == "__main__":
     broker_process = subprocess.Popen(['python', '-m', 'moolib.broker'])
 
     key_pairs = [f"{key}={value}" for key, value in cfg.items()]
-    cmd = ['python', '-m', 'experiment_code.hackrl.experiment'] + key_pairs
+    cmd = ['python', '-m', 'hackrl.experiment'] + key_pairs
     subprocess.run(cmd) 
 
     # When you're done, terminate the broker process
