@@ -24,14 +24,14 @@ class DecisionTransformer(ChaoticDwarvenGPT5):
 
         self.max_length = flags.ttyrec_unroll_length
         self.use_returns = flags.use_returns
-        self.use_actions = flags.use_actions
         self.return_to_go = flags.return_to_go
         self.score_scale = flags.score_scale
         self.use_timesteps = flags.use_timesteps
         self.action_hidden_dim = flags.action_hidden_dim
         self.return_hidden_dim = flags.return_hidden_dim
+        self.hidden_dim = flags.hidden_dim
 
-        self.n = 1 + self.use_actions * 1 + self.use_returns * 1
+        self.n = 1 + self.use_prev_action * 1 + self.use_returns * 1
 
         self.h_dim = sum(
             [

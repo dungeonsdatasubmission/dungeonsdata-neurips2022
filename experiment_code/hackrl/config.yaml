@@ -48,6 +48,7 @@ env:
   max_episode_steps: 100000
 exp_point: point-A       # spare parameter, useful for wandb grouping
 exp_set: experiment-set  # spare parameter, useful for wandb grouping
+exp_tags: local          # spare parameter, useful for wandb grouping
 fixup_init: true
 fn_penalty_step: constant
 grad_norm_clipping: 4
@@ -66,6 +67,7 @@ model: ChaoticDwarvenGPT5
 dropout: 0.1
 n_layer: 3
 n_head: 1
+hidden_dim: 512
 
 normalize_advantages: True
 normalize_reward: False
