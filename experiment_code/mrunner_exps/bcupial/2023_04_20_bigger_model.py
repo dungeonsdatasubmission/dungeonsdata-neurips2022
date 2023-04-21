@@ -39,10 +39,14 @@ config = {
 params_grid = [
     {
         "hidden_dim": [1024],
+        "weight_decay": [0.1],
+        "warmup_steps": [2000],
     },
     {
-        "n_layer": [4],
-        "n_head": [4],
+        "n_layer": [6],
+        "n_head": [8],
+        "weight_decay": [0.1],
+        "warmup_steps": [2000],
     }
 ]
 

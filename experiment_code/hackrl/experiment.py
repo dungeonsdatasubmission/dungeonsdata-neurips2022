@@ -366,6 +366,7 @@ class StatSum:
 class LearnerState:
     model: torch.nn.Module
     optimizer: torch.optim.Optimizer
+    scheduler: torch.optim.lr_scheduler.LRScheduler
     model_version: int = 0
     num_previous_leaders: int = 0
     train_time: float = 0
@@ -377,6 +378,7 @@ class LearnerState:
         r = dataclasses.asdict(self)
         r["model"] = self.model.state_dict()
         r["optimizer"] = self.optimizer.state_dict()
+        r["scheduler"] = self.scheduler.state_dict()
         return r
 
     def load(self, state):
@@ -386,6 +388,7 @@ class LearnerState:
         self.model.version = state["model_version"]
         self.model.load_state_dict(state["model"])
         self.optimizer.load_state_dict(state["optimizer"])
+        self.scheduler.load_state_dict(state["scheduler"])
 
         for k, v in state["global_stats"].items():
             if k in self.global_stats:
@@ -611,12 +614,17 @@ def compute_inverse_loss(predicted_action_logits, actions):
 
 
 def create_optimizer(model):
-    return torch.optim.Adam(
+    return torch.optim.AdamW(
         model.parameters(),
         lr=FLAGS.adam_learning_rate,
         betas=(FLAGS.adam_beta1, FLAGS.adam_beta2),
         eps=FLAGS.adam_eps,
+        weight_decay=FLAGS.weight_decay,
     )
+
+
+def create_scheduler(optimizer):
+    return torch.optim.lr_scheduler.LambdaLR(optimizer, lambda steps: min((steps + 1) / FLAGS.warmup_steps, 1))
 
 
 def compute_gradients(data, learner_state, stats):
@@ -783,18 +791,21 @@ def compute_gradients(data, learner_state, stats):
 
 def step_optimizer(learner_state, stats):
     optimizer = learner_state.optimizer
+    scheduler = learner_state.scheduler
     model = learner_state.model
 
     unclipped_grad_norm = nn.utils.clip_grad_norm_(
         model.parameters(), FLAGS.grad_norm_clipping
     )
     optimizer.step()
+    scheduler.step()
 
     learner_state.model_version += 1
     learner_state.model.version += 1
 
     stats["unclipped_grad_norm"] += unclipped_grad_norm.item()
     stats["optimizer_steps"] += 1
+    stats["lr"] += scheduler._last_lr[0]
 
 
 def log(stats, step, is_global=False):
@@ -893,7 +904,8 @@ def main(cfg):
     else:
         model = hackrl.models.create_model(FLAGS, FLAGS.device)
     optimizer = create_optimizer(model)
-    learner_state = LearnerState(model, optimizer)
+    scheduler = create_scheduler(optimizer)
+    learner_state = LearnerState(model, optimizer, scheduler)
 
     model_numel = sum(p.numel() for p in model.parameters() if p.requires_grad)
     logging.info("Number of model parameters: %i", model_numel)
@@ -969,6 +981,7 @@ def main(cfg):
         "running_advantages": StatMean(cumulative=True),
         "sample_advantages": StatMean(),
         "supervised_loss": StatMean(),
+        "lr": StatMean(),
     }
     learner_state.global_stats = copy.deepcopy(stats)
 
