@@ -19,6 +19,8 @@ hydra:
         format: ${log_fmt}
   run:
     dir: "${localdir}"
+  job:
+    chdir: False
 
 activation_function: relu
 actor_batch_size: 512
@@ -73,6 +75,7 @@ rms_momentum: 0
 reward_clip: 10
 reward_scale: 1
 savedir: "checkpoint/hackrl/${project}/${group}"
+dbfilename: "/ttyrecs/ttyrecs.db"
 state_counter: none
 total_steps: 10_000_000_000
 unroll_length: 32
