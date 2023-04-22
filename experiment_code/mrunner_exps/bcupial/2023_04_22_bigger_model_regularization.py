@@ -35,32 +35,20 @@ config = {
 }
 
 
-# RUN for multiple gpus, decrease batch sizes
 # params different between exps
 params_grid = [
     {
-        "ttyrec_unroll_length": [64],
-        "unroll_length": [64],
-        "actor_batch_size": [128],
-        "batch_size": [64],
-        "ttyrec_batch_size": [256],
-    },
-    {
-        "ttyrec_unroll_length": [64],
-        "unroll_length": [64],
-        "actor_batch_size": [128],
-        "batch_size": [64],
-        "ttyrec_batch_size": [256],
+        "n_layer": [6],
+        "n_head": [8],
+        "weight_decay": [0.1, 0.01],
         "warmup_steps": [10000],
     },
     {
-        "ttyrec_unroll_length": [64],
-        "unroll_length": [64],
-        "actor_batch_size": [128],
-        "batch_size": [64],
-        "ttyrec_batch_size": [256],
-        "warmup_steps": [10000],
+        "n_layer": [6],
+        "n_head": [8],
         "weight_decay": [0.1],
+        "warmup_steps": [10000],
+        "grad_norm_clipping": [2.0],
     },
 ]
 
