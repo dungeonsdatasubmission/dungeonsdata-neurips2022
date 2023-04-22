@@ -383,7 +383,7 @@ class LearnerState:
 
     def load(self, state):
         for k, v in state.items():
-            if k not in ("model", "optimizer", "global_stats"):
+            if k not in ("model", "optimizer", "scheduler", "global_stats"):
                 setattr(self, k, v)
         self.model.version = state["model_version"]
         self.model.load_state_dict(state["model"])

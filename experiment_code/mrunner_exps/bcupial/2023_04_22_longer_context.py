@@ -44,6 +44,8 @@ params_grid = [
         "actor_batch_size": [128],
         "batch_size": [64],
         "ttyrec_batch_size": [256],
+        "num_actor_cpus": [10],
+        "ttyrec_cpus": [5],
     },
 ]
 
