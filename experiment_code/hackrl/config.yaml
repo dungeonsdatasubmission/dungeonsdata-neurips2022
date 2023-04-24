@@ -22,6 +22,7 @@ hydra:
   job:
     chdir: False
 
+seed: 0
 activation_function: relu
 actor_batch_size: 512
 add_image_observation: True

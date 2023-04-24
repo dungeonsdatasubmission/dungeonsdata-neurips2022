@@ -28,6 +28,7 @@ import hackrl.environment
 import hackrl.models
 
 from hackrl.utils.dataset_scores import get_dataset_scores
+from hackrl.utils.utils import set_seed
 
 import render_utils
 from hackrl.core import nest
@@ -836,6 +837,8 @@ omegaconf.OmegaConf.register_new_resolver("uid", uid, use_cache=True)
 def main(cfg):
     global FLAGS
     FLAGS = cfg
+
+    set_seed(seed=FLAGS.seed)
 
     if not os.path.isabs(FLAGS.savedir):
         FLAGS.savedir = os.path.join(hydra.utils.get_original_cwd(), FLAGS.savedir)
