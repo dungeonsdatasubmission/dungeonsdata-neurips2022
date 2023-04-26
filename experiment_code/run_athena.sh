@@ -6,7 +6,7 @@
 #SBATCH --mem=20G
 #SBATCH -c 20
 #SBATCH -t 2880
-#SBATCH -A plgtimeseries-gpu-a100
+#SBATCH -A plgfoundationrl-gpu-a100
 #SBATCH -p plgrid-gpu-a100
 
 
