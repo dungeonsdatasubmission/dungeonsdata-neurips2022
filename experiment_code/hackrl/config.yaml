@@ -30,6 +30,8 @@ adam_beta1: 0.9
 adam_beta2: 0.999
 adam_eps: 0.0000001
 adam_learning_rate: 0.0001
+weight_decay: 0.0001
+warmup_steps: 1 # for lambdaLR scheduler
 appo_clip_policy: 0.1  # 'null' to disable clipping
 appo_clip_baseline: 1.0  # 'null' to disable clipping
 baseline_cost: 1
@@ -48,6 +50,7 @@ env:
   max_episode_steps: 100000
 exp_point: point-A       # spare parameter, useful for wandb grouping
 exp_set: experiment-set  # spare parameter, useful for wandb grouping
+exp_tags: local          # spare parameter, useful for wandb grouping
 fixup_init: true
 fn_penalty_step: constant
 grad_norm_clipping: 4
@@ -62,6 +65,12 @@ local_name: "${uid:}"
 log_fmt: "[%(levelname)s:${local_name} %(process)d %(module)s:%(lineno)d %(asctime)s] %(message)s"
 log_interval: 20
 model: ChaoticDwarvenGPT5
+# model: DecisionTransformer
+dropout: 0.1
+n_layer: 3
+n_head: 1
+hidden_dim: 512
+
 normalize_advantages: True
 normalize_reward: False
 num_actor_batches: 2
@@ -109,6 +118,17 @@ use_tty_only: true  # Use only tty observations. 'False' ~ 10% faster & higher s
 use_prev_action: true
 use_inverse_model: false
 use_inverse_model_only: false
+use_actions: false
+use_returns: true
+action_hidden_dim: 128
+return_hidden_dim: 128
+use_timesteps: true
+return_to_go: true
+linear_time_embeddings: true
+score_scale: 40000
+score_target_strategy: value # 'max', 'mean', 'percentile', 'value'
+score_target_percentile: 95
+score_target_value: 40000
 inverse_loss: 1
 augment_inverse_random: False
 random_inverse_loss: 2

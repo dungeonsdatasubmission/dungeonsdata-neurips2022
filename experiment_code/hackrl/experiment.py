@@ -102,6 +102,13 @@ class TtyrecEnvPool:
                 "prev_action": torch.zeros(self.prev_action_shape, dtype=torch.uint8),
             }
 
+            gameids = np.array(list(map(int, self.dataset_scores.keys()))).max()
+            max_scores = np.zeros(gameids + 1)
+
+            for key, value in self.dataset_scores.items():
+                max_scores[int(key)] = value
+            max_scores = torch.from_numpy(max_scores).to(torch.float32)
+
             prev_action = torch.zeros(
                 (self.ttyrec_batch_size, 1), dtype=torch.uint8
             ).to(self.device)
@@ -135,6 +142,9 @@ class TtyrecEnvPool:
                         "tty_cursor": torch.from_numpy(cursor_uint8),
                         "screen_image": mb_tensors["screen_image"],
                         "done": mb_tensors["done"].bool(),
+                        "timesteps": mb_tensors["timestamps"].float(),
+                        "max_scores": max_scores[mb["gameids"].flatten()].reshape(mb["gameids"].shape).float(),
+                        "mask": torch.ones_like(mb_tensors["timestamps"]).bool()
                     }
 
                     if "keypresses" in mb_tensors:
@@ -142,7 +152,7 @@ class TtyrecEnvPool:
                         actions_converted = (
                             self.embed_actions(actions).squeeze(-1).long()
                         )
-                        final_mb["score"] = mb_tensors["scores"]
+                        final_mb["scores"] = mb_tensors["scores"].float()
                         final_mb["actions_converted"] = actions_converted
                         final_mb["prev_action"] = torch.cat(
                             [prev_action, actions_converted[:, :-1]], dim=1
@@ -356,6 +366,7 @@ class StatSum:
 class LearnerState:
     model: torch.nn.Module
     optimizer: torch.optim.Optimizer
+    scheduler: torch.optim.lr_scheduler.LRScheduler
     model_version: int = 0
     num_previous_leaders: int = 0
     train_time: float = 0
@@ -367,15 +378,17 @@ class LearnerState:
         r = dataclasses.asdict(self)
         r["model"] = self.model.state_dict()
         r["optimizer"] = self.optimizer.state_dict()
+        r["scheduler"] = self.scheduler.state_dict()
         return r
 
     def load(self, state):
         for k, v in state.items():
-            if k not in ("model", "optimizer", "global_stats"):
+            if k not in ("model", "optimizer", "scheduler", "global_stats"):
                 setattr(self, k, v)
         self.model.version = state["model_version"]
         self.model.load_state_dict(state["model"])
         self.optimizer.load_state_dict(state["optimizer"])
+        self.scheduler.load_state_dict(state["scheduler"])
 
         for k, v in state["global_stats"].items():
             if k in self.global_stats:
@@ -450,15 +463,17 @@ class EnvBatchState:
     def __init__(self, flags, model):
         batch_size = flags.actor_batch_size
         device = flags.device
+        self.device = device
         self.batch_size = batch_size
         self.prev_action = torch.zeros(batch_size).long().to(device)
+        self.timesteps = torch.zeros(batch_size).to(device)
         self.future = None
         self.core_state = model.initial_state(batch_size=batch_size)
         self.core_state = nest.map(lambda x: x.to(device), self.core_state)
         self.initial_core_state = self.core_state
         self.discount = flags.discounting
 
-        self.running_reward = torch.zeros(batch_size)
+        self.running_reward = torch.zeros(batch_size).to(device)
         self.discounted_running_reward = torch.zeros(batch_size)
         self.step_count = torch.zeros(batch_size)
 
@@ -466,14 +481,15 @@ class EnvBatchState:
 
     def update(self, env_outputs, action, stats):
         self.prev_action = action
-        self.running_reward += env_outputs["reward"]
+        self.running_reward += env_outputs["reward"].to(self.device)
         self.discounted_running_reward *= self.discount
         self.discounted_running_reward += env_outputs["reward"]
         self.step_count += 1
+        self.timesteps += 1
 
         done = env_outputs["done"]
 
-        episode_return = self.running_reward * done
+        episode_return = self.running_reward.cpu() * done
         episode_step = self.step_count * done
         episodes_done = done.sum().item()
 
@@ -483,7 +499,7 @@ class EnvBatchState:
         stats["steps_done"] += done.numel()
         stats["episodes_done"] += episodes_done
 
-        stats["running_reward"] += self.running_reward.mean().item()
+        stats["running_reward"] += self.running_reward.cpu().mean().item()
         stats["running_step"] += self.step_count.mean().item()
 
         stats["mean_square_discounted_running_reward"] += (
@@ -492,8 +508,9 @@ class EnvBatchState:
         not_done = ~done
 
         self.discounted_running_reward *= not_done
-        self.running_reward *= not_done
+        self.running_reward *= not_done.to(self.device)
         self.step_count *= not_done
+        self.timesteps *= not_done.to(self.device)
 
 
 def compute_baseline_loss(
@@ -597,12 +614,17 @@ def compute_inverse_loss(predicted_action_logits, actions):
 
 
 def create_optimizer(model):
-    return torch.optim.Adam(
+    return torch.optim.AdamW(
         model.parameters(),
         lr=FLAGS.adam_learning_rate,
         betas=(FLAGS.adam_beta1, FLAGS.adam_beta2),
         eps=FLAGS.adam_eps,
+        weight_decay=FLAGS.weight_decay,
     )
+
+
+def create_scheduler(optimizer):
+    return torch.optim.lr_scheduler.LambdaLR(optimizer, lambda steps: min((steps + 1) / FLAGS.warmup_steps, 1))
 
 
 def compute_gradients(data, learner_state, stats):
@@ -769,18 +791,21 @@ def compute_gradients(data, learner_state, stats):
 
 def step_optimizer(learner_state, stats):
     optimizer = learner_state.optimizer
+    scheduler = learner_state.scheduler
     model = learner_state.model
 
     unclipped_grad_norm = nn.utils.clip_grad_norm_(
         model.parameters(), FLAGS.grad_norm_clipping
     )
     optimizer.step()
+    scheduler.step()
 
     learner_state.model_version += 1
     learner_state.model.version += 1
 
     stats["unclipped_grad_norm"] += unclipped_grad_norm.item()
     stats["optimizer_steps"] += 1
+    stats["lr"] += scheduler._last_lr[0]
 
 
 def log(stats, step, is_global=False):
@@ -879,7 +904,8 @@ def main(cfg):
     else:
         model = hackrl.models.create_model(FLAGS, FLAGS.device)
     optimizer = create_optimizer(model)
-    learner_state = LearnerState(model, optimizer)
+    scheduler = create_scheduler(optimizer)
+    learner_state = LearnerState(model, optimizer, scheduler)
 
     model_numel = sum(p.numel() for p in model.parameters() if p.requires_grad)
     logging.info("Number of model parameters: %i", model_numel)
@@ -955,6 +981,7 @@ def main(cfg):
         "running_advantages": StatMean(cumulative=True),
         "sample_advantages": StatMean(),
         "supervised_loss": StatMean(),
+        "lr": StatMean(),
     }
     learner_state.global_stats = copy.deepcopy(stats)
 
@@ -1007,6 +1034,20 @@ def main(cfg):
             )
             TTYREC_HIDDEN_STATE.append(hs)
         TTYREC_ENVPOOL = make_ttyrec_envpool(tp, FLAGS)
+
+        # different strategies for score target
+        if FLAGS.score_target_strategy == "max":
+            score_target = np.max(list(TTYREC_ENVPOOL.dataset_scores.values()))
+        elif FLAGS.score_target_strategy == "mean":
+            score_target = np.mean(list(TTYREC_ENVPOOL.dataset_scores.values())) 
+        elif FLAGS.score_target_strategy == "percentile":
+            score_target = np.percentile(list(TTYREC_ENVPOOL.dataset_scores.values()), q=FLAGS.score_target_percentile)
+        elif FLAGS.score_target_strategy == "value":
+            score_target = FLAGS.score_target_value
+        else:
+            raise NotImplementedError
+    else:
+        score_target = 100000
 
     # Run.
     now = time.time()
@@ -1139,6 +1180,10 @@ def main(cfg):
             )
 
             env_outputs["prev_action"] = env_state.prev_action
+            env_outputs["timesteps"] = env_state.timesteps
+            env_outputs["max_scores"] = (torch.ones_like(env_state.timesteps) * score_target).float()
+            env_outputs["mask"] = torch.ones_like(env_state.timesteps).to(torch.bool)
+            env_outputs["scores"] = env_state.running_reward
             prev_core_state = env_state.core_state
             model.eval()
             with torch.no_grad():

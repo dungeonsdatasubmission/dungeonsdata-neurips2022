@@ -19,6 +19,7 @@ from omegaconf import OmegaConf
 from ..tasks import ENVS
 from .baseline import BaselineNet
 from .chaotic_dwarf import ChaoticDwarvenGPT5
+from .decision_transformer import DecisionTransformer
 from .offline_chaotic_dwarf import DQNChaoticDwarvenGPT5, IQLChaoticDwarvenGPT5 
 from .inverse_model import BigInverseOnlyModel
 from .kickstarter import KickStarter
@@ -35,26 +36,30 @@ MODELS = [
     IQLChaoticDwarvenGPT5, 
     DQN, 
     CQL, 
-    IQL    
+    IQL,
+    DecisionTransformer,    
 ]
 MODELS_LOOKUP = {c.__name__: c for c in MODELS}
 
 
 def initialize_weights(flags, model):
-    def _initialize_weights(layer):
+    def _initialize_weights(layer, gain=1.0):
         if hasattr(layer, "bias") and isinstance(
             layer.bias, torch.nn.parameter.Parameter
         ):
             layer.bias.data.fill_(0)
 
+        init_true = isinstance(layer, (torch.nn.Conv2d, torch.nn.Linear)) or (
+            isinstance(layer, torch.jit.RecursiveScriptModule)
+            and (layer.original_name == "Conv2d" or layer.original_name == "Linear")
+        )
+
         if flags.initialisation == "orthogonal":
-            if type(layer) in [torch.nn.Conv2d, torch.nn.Linear]:
-                torch.nn.init.orthogonal_(layer.weight.data, gain=1.0)
+            if init_true:
+                torch.nn.init.orthogonal_(layer.weight.data, gain=gain)
         elif flags.initialisation == "xavier_uniform":
-            if type(layer) in [torch.nn.Conv2d, torch.nn.Linear]:
-                torch.nn.init.xavier_uniform_(layer.weight.data, gain=1.0)
-            else:
-                pass
+            if init_true:
+                torch.nn.init.xavier_uniform_(layer.weight.data, gain=gain)
         else:
             pass
 
