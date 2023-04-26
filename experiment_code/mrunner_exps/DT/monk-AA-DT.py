@@ -19,18 +19,21 @@ config = {
     "supervised_loss": 1,
     "adam_learning_rate": 0.001,
     "behavioural_clone": True,
-    'group': "monk-AA-DT",
+    'group': name,
     "character": "mon-hum-neu-mal",
     "model": "DecisionTransformer",
-    "return_to_go": False, # TODO: test
+    "return_to_go": True,
     "use_timesteps": True,
     "use_returns": True,
     "use_timesteps": True,
     "score_target_value": 10000,
     "score_scale": 10000,
-    "n_layer": 3, # TODO: test
-    "n_head": 1,
+    "n_layer": 6,
+    "n_head": 8,
     "grad_norm_clipping": 4,
+    "hidden_dim": 512,
+    "warmup_steps": 10000,
+    "weight_decay": 0.01,
 }
 
 
