@@ -91,30 +91,33 @@ class DecisionTransformer(ChaoticDwarvenGPT5):
         fn(self)
         return self
 
-    def initial_state(self, batch_size=1):
+    def initial_state(self, batch_size=1, K=None):
+        if K is None:
+            K = self.max_length
         return dict(
-            blstats=torch.zeros(self.max_length, batch_size, 27).to(torch.long),
-            done=torch.zeros(self.max_length, batch_size).to(torch.bool),
-            message=torch.zeros(self.max_length, batch_size, 256).to(torch.uint8),
-            screen_image=torch.zeros(self.max_length, batch_size, 3, 108, 108).to(torch.uint8),
-            tty_chars=torch.zeros(self.max_length, batch_size, 24, 80).to(torch.uint8),
-            tty_colors=torch.zeros(self.max_length, batch_size, 24, 80).to(torch.int8),
-            tty_cursor=torch.zeros(self.max_length, batch_size, 2).to(torch.uint8),
-            prev_action=torch.zeros(self.max_length, batch_size).to(torch.long),
-            timesteps=torch.zeros(self.max_length, batch_size),
-            scores=torch.zeros(self.max_length, batch_size),
-            max_scores=torch.zeros(self.max_length, batch_size),
-            mask=torch.zeros(self.max_length, batch_size).to(torch.bool),
+            blstats=torch.zeros(K, batch_size, 27).to(torch.long),
+            done=torch.zeros(K, batch_size).to(torch.bool),
+            message=torch.zeros(K, batch_size, 256).to(torch.uint8),
+            screen_image=torch.zeros(K, batch_size, 3, 108, 108).to(torch.uint8),
+            tty_chars=torch.zeros(K, batch_size, 24, 80).to(torch.uint8),
+            tty_colors=torch.zeros(K, batch_size, 24, 80).to(torch.int8),
+            tty_cursor=torch.zeros(K, batch_size, 2).to(torch.uint8),
+            prev_action=torch.zeros(K, batch_size).to(torch.long),
+            timesteps=torch.zeros(K, batch_size),
+            scores=torch.zeros(K, batch_size),
+            max_scores=torch.zeros(K, batch_size),
+            mask=torch.zeros(K, batch_size).to(torch.bool),
         )
 
     def forward(self, inputs, core_state):
         org_inputs = inputs
         OT = org_inputs["screen_image"].shape[0]
+        K = max(self.max_length, OT)
 
         core_state = dict(sorted({key: value for key, value in core_state.items() if key in inputs.keys()}.items()))
         inputs = dict(sorted({key: value for key, value in inputs.items() if key in core_state.keys()}.items()))
         inputs = nest.map_many(partial(torch.cat, dim=0), *[core_state, inputs])
-        inputs = nest.map(lambda x: x[-self.max_length :], inputs)
+        inputs = nest.map(lambda x: x[-K :], inputs)
 
         T, B, C, H, W = inputs["screen_image"].shape
 
@@ -209,7 +212,7 @@ class DecisionTransformer(ChaoticDwarvenGPT5):
                 mask[x, :, :y, :y] = 1
 
                 # reset state if episode finished
-                init_state = self.initial_state()
+                init_state = self.initial_state(K=OT)
                 init_state = nest.map(torch.squeeze, init_state)
                 nest.slice(inputs, (slice(None), x), init_state)
             causal_mask *= mask

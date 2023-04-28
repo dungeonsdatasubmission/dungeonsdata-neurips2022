@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from mrunner.helpers.specification_helper import create_experiments_helper
+from mrunner.helpers.specification_helper import create_experiments_helper, get_combinations
 
 
 name = globals()["script"][:-3]
@@ -18,7 +18,20 @@ config = {
 
 
 # params different between exps
-params_grid = {}
+params_grid = [
+    {
+        "seed": [0, 1, 2],
+    },
+]
+
+params_configurations = get_combinations(params_grid)
+
+final_grid = []
+for e, cfg in enumerate(params_configurations):
+    cfg = {key: [value] for key, value in cfg.items()}
+    cfg["group"] = [f"{name}_{e}"]
+    final_grid.append(dict(cfg))
+
 
 experiments_list = create_experiments_helper(
     experiment_name=name,
@@ -29,5 +42,5 @@ experiments_list = create_experiments_helper(
     tags=[name],
     exclude=["checkpoint"],
     base_config=config,
-    params_grid=params_grid,
+    params_grid=final_grid,
 )

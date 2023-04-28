@@ -555,8 +555,8 @@ def compute_entropy_loss(logits, stats=None):
 def compute_kickstarting_loss(student_logits, expert_logits):
     T, B, *_ = student_logits.shape
     return torch.nn.functional.kl_div(
-        F.log_softmax(student_logits.view(T * B, -1), dim=-1),
-        F.log_softmax(expert_logits.view(T * B, -1), dim=-1),
+        F.log_softmax(student_logits.reshape(T * B, -1), dim=-1),
+        F.log_softmax(expert_logits.reshape(T * B, -1), dim=-1),
         log_target=True,
         reduction="batchmean",
     )
