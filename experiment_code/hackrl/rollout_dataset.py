@@ -15,6 +15,8 @@ import hackrl.environment
 import hackrl.models
 from hackrl.core import nest
 
+os.environ['MOOLIB_ALLOW_FORK'] = '1'
+
 ENVS = None
 
 
