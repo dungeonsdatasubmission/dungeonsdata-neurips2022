@@ -1058,6 +1058,7 @@ def main(cfg):
     last_reduce_stats = now
     is_leader = False
     is_connected = False
+    checkpoint_steps = 0
     while not terminate:
         prev_now = now
         now = time.time()
@@ -1140,18 +1141,14 @@ def main(cfg):
             ):
                 learner_state.last_checkpoint = learner_state.train_time
                 save_checkpoint(checkpoint_path, learner_state)
-            if (
-                learner_state.train_time - learner_state.last_checkpoint_history
-                >= FLAGS.checkpoint_history_interval
-            ):
-                learner_state.last_checkpoint_history = learner_state.train_time
-                save_checkpoint(
+            if steps // FLAGS.checkpoint_save_every > checkpoint_steps:
+                save_checkpoint(                
                     os.path.join(
-                        FLAGS.savedir,
-                        "checkpoint_v%d.tar" % learner_state.model_version,
-                    ),
-                    learner_state,
+                        FLAGS.savedir, "checkpoint_v%d" % ((steps // FLAGS.checkpoint_save_every) * FLAGS.checkpoint_save_every)
+                    ), 
+                    learner_state
                 )
+                checkpoint_steps = steps // FLAGS.checkpoint_save_every
 
         if accumulator.has_gradients():
             gradient_stats = accumulator.get_gradient_stats()
