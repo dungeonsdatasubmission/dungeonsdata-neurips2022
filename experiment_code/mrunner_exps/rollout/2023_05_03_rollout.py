@@ -14,7 +14,7 @@ config = {
     "checkpoint_dir": "/checkpoint/hackrl/nle/monk-AA-DT-40k-newembeds/checkpoint.tar",
     "savedir": "rollout_results",
     "num_actor_cpus": 20,
-    "rollouts": 1024,
+    "rollouts": 8192,
     "batch_size": 256,
     "wandb": True,
 }
