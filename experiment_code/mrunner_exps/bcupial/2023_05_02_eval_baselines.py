@@ -25,8 +25,8 @@ args.update(config)
 
 monk_appo = "/mscratch/nle/02_05-18_04-musing_bartik/monk-appo_wdkc_2/checkpoint/hackrl/nle/monk-APPO_2/checkpoint.tar"
 monk_appo_t = "/mscratch/nle/02_05-11_47-blissful_noyce/monk-appo-t_j13x_2/checkpoint/hackrl/nle/monk-APPO-T_2/checkpoint.tar"
-monk_appo_aa_bc = "/mscratch/nle/02_05-18_05-jovial_banach/monk-appo-aa-bc_rz35_0/checkpoint/hackrl/nle/monk-APPO-AA-BC_0/checkpoint.tar"
-monk_appo_aa_bc_t = "/mscratch/nle/01_05-19_47-sad_bohr/monk-appo-aa-bc-t_v0r1_4/checkpoint/hackrl/nle/monk-APPO-AA-BC-T_4/checkpoint.tar"
+monk_appo_aa_bc = "/mscratch/nle/02_05-18_05-jovial_banach/monk-appo-aa-bc_rz35_3/checkpoint/hackrl/nle/monk-APPO-AA-BC_3/checkpoint.tar"
+monk_appo_aa_bc_t = "/mscratch/nle/01_05-19_47-sad_bohr/monk-appo-aa-bc-t_v0r1_5/checkpoint/hackrl/nle/monk-APPO-AA-BC-T_5/checkpoint.tar"
 monk_appo_aa_ks = "/mscratch/nle/02_05-18_05-eloquent_ramanujan/monk-appo-aa-ks_ic86_1/checkpoint/hackrl/nle/monk-APPO-AA-KS_1/checkpoint.tar"
 monk_appo_aa_ks_t = "/mscratch/nle/01_05-19_48-vigilant_dijkstra/monk-appo-aa-ks-t_0k6i_4/checkpoint/hackrl/nle/monk-APPO-AA-KS-T_4/checkpoint.tar"
 
