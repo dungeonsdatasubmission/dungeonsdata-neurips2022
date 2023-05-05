@@ -14,8 +14,7 @@ import hackrl.core
 import hackrl.environment
 import hackrl.models
 from hackrl.core import nest
-
-os.environ['MOOLIB_ALLOW_FORK'] = '1'
+import matplotlib.pyplot as plt
 
 ENVS = None
 
@@ -48,7 +47,7 @@ def generate_envpool_rollouts(
     pbar_idx=0, 
     score_target=10000,
     savedir=None,
-    save_ttyrec_every=1000000, # only first time
+    log_to_wandb=False,
 ):
     global ENVS
     
@@ -94,7 +93,8 @@ def generate_envpool_rollouts(
     ).to(device)
 
     returns = []
-    results = [None, None]
+    lens = []
+    results = [None] * num_actor_batches
     grand_pbar = tqdm.tqdm(position=0, leave=True)
     pbar = tqdm.tqdm(
         total=batch_size * num_actor_batches * split, position=pbar_idx + 1, leave=True
@@ -131,6 +131,15 @@ def generate_envpool_rollouts(
 
             for j in np.argwhere(done_and_valid.cpu().numpy()):
                 returns.append(current_reward[i][j[0]].item())
+                lens.append(int(env_outputs["timesteps"][j[0]]))
+                if log_to_wandb:
+                    wandb.log(
+                        {
+                            "episode_return": returns[-1],
+                            "episode_len": lens[-1],
+                        },
+                        step=lens[-1]
+                    )
 
             current_reward[i] *= 1 - env_outputs["done"].int()
             timesteps[i] += 1
@@ -144,6 +153,12 @@ def generate_envpool_rollouts(
                 outputs, hs[i] = model(env_outputs, hs[i])
             action[i] = outputs["action"].reshape(-1)
             results[i] = ENVS.step(i, action[i])
+
+    if log_to_wandb:
+        fig, ax = plt.subplots()
+        ax.scatter(lens, returns)
+        wandb.log({"scatter_plot": wandb.Image(fig)})
+
     return len(returns), np.mean(returns), np.std(returns), np.median(returns)
 
 
@@ -200,6 +215,7 @@ def main(variant):
         batch_size=variant["batch_size"],
         num_actor_cpus=variant["num_actor_cpus"],
         score_target=variant["score_target"],
+        log_to_wandb=log_to_wandb,
     )
 
     if log_to_wandb:
@@ -242,7 +258,7 @@ def main(variant):
             f.write(",".join(str(d) for d in data) + "\n")
     print("done")
 
-    if wandb:
+    if log_to_wandb:
         wandb.log(stats_values)
 
 
