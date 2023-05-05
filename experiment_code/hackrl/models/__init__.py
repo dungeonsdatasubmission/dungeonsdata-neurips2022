@@ -11,10 +11,12 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+from typing import List
 
 import torch
 from nle.env.base import DUNGEON_SHAPE
 from omegaconf import OmegaConf
+
 
 from ..tasks import ENVS
 from .baseline import BaselineNet
@@ -37,7 +39,7 @@ MODELS = [
     DQN, 
     CQL, 
     IQL,
-    DecisionTransformer,    
+    DecisionTransformer,
 ]
 MODELS_LOOKUP = {c.__name__: c for c in MODELS}
 
@@ -78,6 +80,24 @@ def create_model(flags, device):
     model.to(device=device)
 
     initialize_weights(flags, model)
+
+    if flags['use_checkpoint_actor']:
+
+        def distil_actor_nad_core(load_data):
+            return {
+                key: elem
+                for key, elem in load_data["learner_state"]["model"].items()
+                if "baseline" not in key
+            }
+
+        load_data = torch.load(
+            flags["model_checkpoint_path"],
+            map_location=torch.device(device),
+        )
+        model.load_state_dict(distil_actor_nad_core(load_data), strict=False)
+        freeze(model)
+        unfreeze_selected(model, ["baseline", "embed_ln"])
+
     return model
 
 
@@ -88,3 +108,28 @@ def load_model(load_dir, device):
     checkpoint_states = torch.load(flags.checkpoint, map_location=device)
     model.load_state_dict(checkpoint_states["model_state_dict"])
     return model
+
+
+def set_requires_grad(model, modules: List[str], requires_grad: bool):
+    for module_name in modules:
+        for name, param in model.named_parameters():
+            if module_name in name:
+                param.requires_grad = requires_grad
+
+
+def freeze(model):
+    for name, param in model.named_parameters():
+        param.requires_grad = False
+
+
+def unfreeze(model):
+    for name, param in model.named_parameters():
+        param.requires_grad = True
+
+
+def freeze_selected(model, modules: List[str]):
+    set_requires_grad(model, modules, False)
+
+
+def unfreeze_selected(model, modules: List[str]):
+    set_requires_grad(model, modules, True)

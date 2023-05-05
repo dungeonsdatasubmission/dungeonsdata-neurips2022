@@ -152,3 +152,7 @@ ttyrec_batch_size: 512
 ttyrec_unroll_length: 32
 ttyrec_envpool_size: 4
 ttyrec_cpus: 10 
+
+use_checkpoint_actor: False
+model_checkpoint_path: /checkpoint/checkpoint.tar
+unfreeze_actor_steps: 0
