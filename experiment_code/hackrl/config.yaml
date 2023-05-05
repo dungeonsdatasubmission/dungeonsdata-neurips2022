@@ -39,7 +39,7 @@ batch_size: 256
 character: "@"
 checkpoint_interval: 600
 checkpoint_history_interval: 3600
-checkpoint_save_every: 100_000_000
+checkpoint_save_every: 10_000_000
 connect: 0.0.0.0:4431
 crop_dim: 18
 device: "cuda:0"
