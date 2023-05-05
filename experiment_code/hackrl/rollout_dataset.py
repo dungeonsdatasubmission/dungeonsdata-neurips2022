@@ -40,20 +40,17 @@ def load_model_and_flags(path, device):
 def generate_envpool_rollouts(
     model, 
     flags, 
-    rollouts=512, 
+    rollouts=1024, 
     batch_size=512,
     num_actor_cpus = 20,
-    num_actor_batches = 1,
+    num_actor_batches = 2,
     pbar_idx=0, 
     score_target=10000,
     savedir=None,
+    save_ttyrec_every=1,
     log_to_wandb=False,
 ):
     global ENVS
-    
-    assert batch_size == rollouts
-    assert num_actor_batches == 1
-
     # NB: We do NOT want to generate the first N rollouts from B batch
     # of envs since this will bias short episodes.
     # Instead lets just allocate some episodes to each env
@@ -162,29 +159,19 @@ def generate_envpool_rollouts(
     return len(returns), np.mean(returns), np.std(returns), np.median(returns)
 
 
-def evaluate_folder(name, path, device, pbar_idx, savedir, rollouts, batch_size, **kwargs):
+def evaluate_folder(name, path, device, pbar_idx, savedir, **kwargs):
     print(f"{pbar_idx} {name} Using: {path}")
     save_dir = Path(savedir) / name
     save_dir.mkdir(parents=True, exist_ok=True)
     model, flags = load_model_and_flags(path, device)
-
-    assert rollouts % batch_size == 0
-    iters = rollouts // batch_size
-
-    final_returns = []
-    for i in range(iters):
-        returns = generate_envpool_rollouts(
-            model=model, 
-            flags=flags, 
-            pbar_idx=pbar_idx, 
-            rollouts=batch_size,
-            batch_size=batch_size,
-            savedir=savedir,
-            **kwargs,
-        )
-        final_returns.append(returns)
-    
-    return (name, path) + tuple(list(np.stack(final_returns).mean(axis=0)))
+    returns = generate_envpool_rollouts(
+        model=model, 
+        flags=flags, 
+        pbar_idx=pbar_idx, 
+        savedir=savedir,
+        **kwargs,
+    )
+    return (name, path) + returns
 
 
 def parse_args(args=None):
@@ -195,6 +182,7 @@ def parse_args(args=None):
     parser.add_argument("--rollouts", type=int, default=1024)
     parser.add_argument("--batch_size", type=int, default=512)
     parser.add_argument("--num_actor_cpus", type=int, default=20)
+    parser.add_argument("--num_actor_batches", type=int, default=2)
     parser.add_argument("--device", type=str, default="cuda:0")
     parser.add_argument("--score_target", type=float, default=5000)
     # wandb stuff
@@ -214,6 +202,7 @@ def main(variant):
     kwargs = dict(
         batch_size=variant["batch_size"],
         num_actor_cpus=variant["num_actor_cpus"],
+        num_actor_batches=variant["num_actor_batches"],
         score_target=variant["score_target"],
         log_to_wandb=log_to_wandb,
     )
