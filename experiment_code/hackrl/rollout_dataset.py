@@ -1,6 +1,7 @@
 import os
 import argparse
 
+from collections import deque
 from pathlib import Path
 
 import moolib
@@ -9,6 +10,9 @@ import omegaconf
 import torch
 import tqdm
 import wandb
+import pandas as pd
+
+from nle import nethack
 
 import hackrl.core
 import hackrl.environment
@@ -90,8 +94,10 @@ def generate_envpool_rollouts(
     ).to(device)
 
     returns = []
+    scores = []
+    times = []
     lens = []
-    results = [None] * num_actor_batches
+    results = [None, None]
     grand_pbar = tqdm.tqdm(position=0, leave=True)
     pbar = tqdm.tqdm(
         total=batch_size * num_actor_batches * split, position=pbar_idx + 1, leave=True
@@ -100,6 +106,9 @@ def generate_envpool_rollouts(
     action = torch.zeros((num_actor_batches, batch_size)).long().to(device)
     hs = [model.initial_state(batch_size) for _ in range(num_actor_batches)]
     hs = nest.map(lambda x: x.to(device), hs)
+
+    bl_scores = [deque(maxlen=2), deque(maxlen=2)]
+    bl_times = [deque(maxlen=2), deque(maxlen=2)]
 
     totals = torch.sum(rollouts_left).item()
     subtotals = [torch.sum(rollouts_left[i]).item() for i in range(num_actor_batches)]
@@ -116,6 +125,9 @@ def generate_envpool_rollouts(
             env_outputs["prev_action"] = action[i]
             current_reward += env_outputs["reward"]
 
+            bl_scores[i].append(env_outputs["blstats"][:, nethack.NLE_BL_SCORE])
+            bl_times[i].append(env_outputs["blstats"][:, nethack.NLE_BL_TIME])
+
             env_outputs["timesteps"] = timesteps[i]
             env_outputs["max_scores"] = (torch.ones_like(env_outputs["timesteps"]) * score_target).float()
             env_outputs["mask"] = torch.ones_like(env_outputs["timesteps"]).to(torch.bool)
@@ -129,11 +141,15 @@ def generate_envpool_rollouts(
             for j in np.argwhere(done_and_valid.cpu().numpy()):
                 returns.append(current_reward[i][j[0]].item())
                 lens.append(int(env_outputs["timesteps"][j[0]]))
+                scores.append(bl_scores[i][-2][j[0]].item())
+                times.append(bl_times[i][-2][j[0]].item())
                 if log_to_wandb:
                     wandb.log(
                         {
                             "episode_return": returns[-1],
                             "episode_len": lens[-1],
+                            "episode_score": scores[-1],
+                            "episode_time": times[-1],
                         },
                         step=lens[-1]
                     )
@@ -152,9 +168,16 @@ def generate_envpool_rollouts(
             results[i] = ENVS.step(i, action[i])
 
     if log_to_wandb:
-        fig, ax = plt.subplots()
-        ax.scatter(lens, returns)
+        fig, (ax1, ax2) = plt.subplots(ncols=2, nrows=1)
+        ax1.scatter(lens, returns)
+        ax2.scatter(times, scores)
         wandb.log({"scatter_plot": wandb.Image(fig)})
+
+        df = pd.DataFrame({"returns": returns, "lens": lens, "scores": scores, "times": times})
+        df.to_csv("rollout_stats.csv", index=None)
+        
+        table = wandb.Table(dataframe=df)
+        wandb.log({"frame": table})
 
     return len(returns), np.mean(returns), np.std(returns), np.median(returns)
 
