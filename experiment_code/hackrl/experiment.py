@@ -660,7 +660,9 @@ def compute_gradients(data, learner_state, stats):
             supervised_loss = (
                 FLAGS.supervised_loss * F.cross_entropy(logits[:-1], true_a[:-1]).mean()
             )
+        FLAGS.supervised_loss *= FLAGS.supervised_decay
         stats["supervised_loss"] += supervised_loss.item()
+        stats["supervised_coeff"] += FLAGS.supervised_loss
 
         total_loss += supervised_loss
         if FLAGS.use_inverse_model:
@@ -773,8 +775,10 @@ def compute_gradients(data, learner_state, stats):
             learner_outputs["policy_logits"],
             actor_outputs["kick_policy_logits"],
         )
+        FLAGS.kickstarting_loss *= FLAGS.kickstarting_decay
         total_loss += kickstarting_loss
         stats["kickstarting_loss"] += kickstarting_loss.item()
+        stats["kickstarting_coeff"] += FLAGS.kickstarting_loss
 
     total_loss.backward()
 
@@ -976,6 +980,7 @@ def main(cfg):
         "clipped_baseline_fraction": StatMean(),
         "clipped_policy_fraction": StatMean(),
         "kickstarting_loss": StatMean(),
+        "kickstarting_coeff": StatMean(),
         "inverse_loss": StatMean(),
         "inverse_prediction_accuracy": StatMean(),
         "random_inverse_loss": StatMean(),
@@ -985,6 +990,7 @@ def main(cfg):
         "running_advantages": StatMean(cumulative=True),
         "sample_advantages": StatMean(),
         "supervised_loss": StatMean(),
+        "supervised_coeff": StatMean(),
         "lr": StatMean(),
     }
     learner_state.global_stats = copy.deepcopy(stats)
