@@ -39,7 +39,7 @@ batch_size: 256
 character: "@"
 checkpoint_interval: 600
 checkpoint_history_interval: 3600
-checkpoint_save_every: 100_000_000
+checkpoint_save_every: 10_000_000
 connect: 0.0.0.0:4431
 crop_dim: 18
 device: "cuda:0"
@@ -113,7 +113,8 @@ baseline:
 run_teacher_hs: False
 use_kickstarting: False
 kickstarting_loss: 1.0
-kickstarting_path: /checkpoint/ehambro/20220519/carmine-woodpecker/checkpoint_v102229.tar
+kickstarting_decay: 1.0
+kickstarting_path: /net/pr2/projects/plgrid/plgggmum_crl/bcupial/monk-AA-BC/checkpoint.tar
 
 use_tty_only: true  # Use only tty observations. 'False' ~ 10% faster & higher score
 use_prev_action: true
@@ -136,6 +137,7 @@ random_inverse_loss: 2
 use_difference_vector: False
 use_resnet: False
 supervised_loss: 0
+supervised_decay: 1.0
 
 dataset: autoascend
 dataset_demigod: False
@@ -152,3 +154,7 @@ ttyrec_batch_size: 512
 ttyrec_unroll_length: 32
 ttyrec_envpool_size: 4
 ttyrec_cpus: 10 
+
+use_checkpoint_actor: False
+model_checkpoint_path: /checkpoint/checkpoint.tar
+unfreeze_actor_steps: 0

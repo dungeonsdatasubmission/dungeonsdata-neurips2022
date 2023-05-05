@@ -660,7 +660,9 @@ def compute_gradients(data, learner_state, stats):
             supervised_loss = (
                 FLAGS.supervised_loss * F.cross_entropy(logits[:-1], true_a[:-1]).mean()
             )
+        FLAGS.supervised_loss *= FLAGS.supervised_decay
         stats["supervised_loss"] += supervised_loss.item()
+        stats["supervised_coeff"] += FLAGS.supervised_loss
 
         total_loss += supervised_loss
         if FLAGS.use_inverse_model:
@@ -773,8 +775,10 @@ def compute_gradients(data, learner_state, stats):
             learner_outputs["policy_logits"],
             actor_outputs["kick_policy_logits"],
         )
+        FLAGS.kickstarting_loss *= FLAGS.kickstarting_decay
         total_loss += kickstarting_loss
         stats["kickstarting_loss"] += kickstarting_loss.item()
+        stats["kickstarting_coeff"] += FLAGS.kickstarting_loss
 
     total_loss.backward()
 
@@ -896,6 +900,10 @@ def main(cfg):
         student = hackrl.models.create_model(FLAGS, FLAGS.device)
         load_data = torch.load(FLAGS.kickstarting_path)
         t_flags = omegaconf.OmegaConf.create(load_data["flags"])
+       
+        t_flags.use_checkpoint_actor = FLAGS['use_checkpoint_actor']
+        t_flags.model_checkpoint_path = FLAGS["model_checkpoint_path"]
+        
         teacher = hackrl.models.create_model(t_flags, FLAGS.device)
         teacher.load_state_dict(load_data["learner_state"]["model"])
         model = hackrl.models.KickStarter(
@@ -972,6 +980,7 @@ def main(cfg):
         "clipped_baseline_fraction": StatMean(),
         "clipped_policy_fraction": StatMean(),
         "kickstarting_loss": StatMean(),
+        "kickstarting_coeff": StatMean(),
         "inverse_loss": StatMean(),
         "inverse_prediction_accuracy": StatMean(),
         "random_inverse_loss": StatMean(),
@@ -981,6 +990,7 @@ def main(cfg):
         "running_advantages": StatMean(cumulative=True),
         "sample_advantages": StatMean(),
         "supervised_loss": StatMean(),
+        "supervised_coeff": StatMean(),
         "lr": StatMean(),
     }
     learner_state.global_stats = copy.deepcopy(stats)
@@ -1058,16 +1068,37 @@ def main(cfg):
     last_reduce_stats = now
     is_leader = False
     is_connected = False
+    unfreezed = False
     checkpoint_steps = 0
     while not terminate:
         prev_now = now
         now = time.time()
 
         steps = learner_state.global_stats["env_train_steps"].result()
+        if not unfreezed and steps > FLAGS.unfreeze_actor_steps:
+            if FLAGS.use_kickstarting:
+                hackrl.models.unfreeze(model.student)
+            else:
+                hackrl.models.unfreeze(model)
+            unfreezed = True
+
         if steps >= FLAGS.total_steps:
             logging.info("Stopping training after %i steps", steps)
             break
 
+        if FLAGS.wandb:
+            if FLAGS.use_kickstarting:
+                wandb.log({"debug/student_core_weight":model.student.core.weight_hh_l0.detach().cpu()[0,0] }, step=steps)
+                wandb.log({"debug/student_policy_weight":model.student.policy.weight.detach().cpu()[0,0] }, step=steps)
+                wandb.log({"debug/student_policy_weight":model.student.policy.weight.detach().cpu()[0,0] }, step=steps)
+                wandb.log({"debug/student_baseline_weight":model.student.baseline.weight.detach().cpu()[0,0] }, step=steps)
+                wandb.log({"debug/teacher_core_weight":model.teacher.core.weight_hh_l0.detach().cpu()[0,0] }, step=steps)
+                wandb.log({"debug/teacher_policy_weight":model.teacher.policy.weight.detach().cpu()[0,0] }, step=steps)
+                wandb.log({"debug/teacher_baseline_weight":model.teacher.baseline.weight.detach().cpu()[0,0] }, step=steps)
+            else:
+                wandb.log({"debug/core_weight":model.core.weight_hh_l0.detach().cpu()[0,0] }, step=steps)
+                wandb.log({"debug/policy_weight":model.policy.weight.detach().cpu()[0,0] }, step=steps)
+                wandb.log({"debug/baseline_weight":model.baseline.weight.detach().cpu()[0,0] }, step=steps)
         rpc_group.update()
         accumulator.update()
         if accumulator.wants_state():
