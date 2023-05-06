@@ -1,9 +1,9 @@
 import argparse 
 import json
 import ast
-
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 import wandb
 
@@ -57,14 +57,26 @@ def main(dbfilename: Path, dataset_name: str, entity: str, project: str, run_id:
         print(f"games in database: {len(dataset_stats)}")
         with db.db(filename=str(dbfilename), rw=True) as conn:
             games_before = db.count_games(dataset_name, conn)
+            remove_games = []
+            keep_points = []
+            drop_points = []
             for index, row in dataset_stats.iterrows():
                 # if (row["points"], row["turns"]) not in game_stats:
-                if int(row["points"]) not in game_points:
-                    db.drop_games(dataset_name, int(row["gameid"]), conn=conn, commit=True)
+                # if int(row["points"]) not in game_points:
+                if int(row["turns"]) < 3000:
+                    remove_games.append(int(row["gameid"]))
+                    drop_points.append(int(row["points"]))
+                else:
+                    keep_points.append(int(row["points"]))
 
+            db.drop_games(dataset_name, *remove_games, conn=conn, commit=True)
             games_left = db.count_games(dataset_name, conn)
             print(f"dropped {games_before - games_left}")
             print(f"left {games_left}")
+            print(f"mean keep points {np.mean(keep_points)}")
+            print(f"mean drop points {np.mean(drop_points)}")
+            print(f"mean game points {np.mean(game_points)}")
+            print(f"mean database points {np.mean(dataset_stats['points'])}")
     else:
         print("database doesn't exist")
 
