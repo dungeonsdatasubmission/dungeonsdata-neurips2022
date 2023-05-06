@@ -82,9 +82,17 @@ def main(variant):
 
     checkpoint_dir = Path(checkpoint_dir)
 
+    def tryint(i):
+        try:
+            int(i)
+            return True
+        except Exception as e:
+            return False
+
     # create dictionary containing checkpoint_step as key and checkpoint_path as value
     checkpoints = list(checkpoint_dir.iterdir())
     checkpoints = list(filter(lambda path: path.name.startswith("checkpoint_"), checkpoints))
+    checkpoints = list(filter(lambda path: tryint(path.name.split('_')[1][1:]), checkpoints))
     checkpoints = list(filter(lambda path: int(path.name.split('_')[1][1:]) % variant["checkpoint_step"] == 0, checkpoints))
     checkpoints = sorted(checkpoints, key=lambda path: int(path.name.split('_')[1][1:]))
     checkpoints = {int(path.name.split('_')[1][1:]): path for path in checkpoints}
