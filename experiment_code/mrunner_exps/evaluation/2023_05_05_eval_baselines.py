@@ -1,8 +1,18 @@
-from mrunner.helpers.specification_helper import create_experiments_helper, get_combinations
-from random_word import RandomWords
+from mrunner.helpers.specification_helper import create_experiments_helper
 
-from hackrl.eval import parse_args
+from hackrl.eval import parse_args as eval_parse_args
+from hackrl.eval_array import parse_args as eval_array_parse_args
+from hackrl.rollout import parse_args as rollout_parse_args
 
+
+PARSE_ARGS_DICT = {"eval": eval_parse_args, "eval_array": eval_array_parse_args, "rollout": rollout_parse_args}
+
+
+def combine_config_with_defaults(config):
+    run_kind = config["run_kind"]
+    res = vars(PARSE_ARGS_DICT[run_kind]([]))
+    res.update(config)
+    return res
 
 name = globals()["script"][:-3]
 
@@ -12,16 +22,13 @@ config = {
     "exp_tags": [name],
     "name": "eval_monk-AA-DT-40k-newembeds",
     "checkpoint_dir": "/checkpoint/hackrl/nle/monk-AA-DT-40k-newembeds/checkpoint.tar",
-    "output_dir": "eval_results",
     "num_actor_cpus": 20,
     "num_actor_batches": 2,
     "rollouts": 1024,
     "batch_size": 256,
     "wandb": True,
 }
-
-args = vars(parse_args())
-args.update(config)
+config = combine_config_with_defaults(config)
 
 monk_appo = "/mscratch/nle/02_05-18_04-musing_bartik/monk-appo_wdkc_2/checkpoint/hackrl/nle/monk-APPO_2/checkpoint.tar"
 monk_appo_t = "/mscratch/nle/02_05-11_47-blissful_noyce/monk-appo-t_j13x_2/checkpoint/hackrl/nle/monk-APPO-T_2/checkpoint.tar"
@@ -46,16 +53,6 @@ params_grid = [
     },
 ]
 
-params_configurations = get_combinations(params_grid)
-
-final_grid = []
-for e, cfg in enumerate(params_configurations):
-    cfg = {key: [value] for key, value in cfg.items()}
-    r = RandomWords().get_random_word()
-    cfg["group"] = [f"{name}_{e}_{r}"]
-    final_grid.append(dict(cfg))
-
-
 experiments_list = create_experiments_helper(
     experiment_name=name,
     project_name="nle",
@@ -64,6 +61,6 @@ experiments_list = create_experiments_helper(
     python_path=".",
     tags=[name],
     exclude=["checkpoint"],
-    base_config=args,
-    params_grid=final_grid,
+    base_config=config,
+    params_grid=params_grid,
 ) 

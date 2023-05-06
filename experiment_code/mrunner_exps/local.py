@@ -7,24 +7,43 @@ name = globals()["script"][:-3]
 
 # params for all exps
 config = {
-    "exp_point": "monk-AA-BC",
+    "exp_tags": [name],
+    "connect":"0.0.0.0:4431",
+    "exp_set": "2G",
+    "exp_point": "monk-APPODT",
     "num_actor_cpus": 20,
     "total_steps": 2_000_000_000,
-    "actor_batch_size": 16,
-    "batch_size": 32,
-    "ttyrec_batch_size": 64,
-    "supervised_loss": 1,
-    "adam_learning_rate": 0.001,
-    "behavioural_clone": True,
+    'group': "monk-APPODT",
     "character": "mon-hum-neu-mal",
-    'group': "monk-AA-BC",
-    "connect":"0.0.0.0:4431",
-    "dbfilename": "/home/bartek/Workspace/data/nethack/AA-taster/ttyrecs.db",
+    "model": "DecisionTransformer",
+    "use_timesteps": True,
+    "use_timesteps": True,
+    "return_to_go": True,
+    "score_target_value": 10000,
+    "score_scale": 10000,
+    "grad_norm_clipping": 4,
+    "n_layer": 6,
+    "n_head": 8,
+    "hidden_dim": 512,
+    "warmup_steps": 10000,
+    "weight_decay": 0.01,
 }
 
 
 # params different between exps
-params_grid = {}
+params_grid = {
+    "actor_batch_size": [128],
+    "batch_size": [64],
+    "virtual_batch_size": [64],
+    "ttyrec_batch_size": [256],
+    "dbfilename": ["/home/bartek/Workspace/data/nethack/AA-taster/ttyrecs.db"],
+    "dataset": ["bc"],
+    "wandb": [True],
+
+    "use_checkpoint_actor": [False],
+    "unfreeze_actor_steps": [0],
+    "model_checkpoint_path": ["/home/bartek/Workspace/data/nethack_checkpoints/monk-AA-DT/checkpoint.tar"],
+}
 
 experiments_list = create_experiments_helper(
     experiment_name=name,
