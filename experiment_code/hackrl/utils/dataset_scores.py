@@ -13,4 +13,4 @@ def get_dataset_scores(dataset_name, dbfilename=db.DB):
     with db.connect(dbfilename) as conn:
 
         scores = dict(list(conn.execute(sql, sql_args)))
-        return scores
+    return scores

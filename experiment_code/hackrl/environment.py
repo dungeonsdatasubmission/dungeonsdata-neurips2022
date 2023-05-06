@@ -15,7 +15,7 @@ from . import tasks
 from . import wrappers
 
 
-def create_env(flags):
+def create_env(flags, savedir=None, save_ttyrec_every=0):
     env_class = tasks.ENVS[flags.env.name]
 
     observation_keys = (
@@ -50,6 +50,8 @@ def create_env(flags):
     # warnings.warn("Ignoring flags.reward_win and flags.reward_lose")
     if flags.state_counter != "none":
         kwargs.update(state_counter=flags.state_counter)
+    if savedir:
+        kwargs.update(savedir=savedir, save_ttyrec_every=save_ttyrec_every)
     env = env_class(**kwargs)
 
     if flags.add_image_observation:

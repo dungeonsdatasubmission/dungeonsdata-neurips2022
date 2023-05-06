@@ -53,6 +53,7 @@ From: nvidia/cuda:11.8.0-cudnn8-devel-ubuntu22.04
 
     pip install -q tqdm debugpy
     pip install -q nle
+    pip install -q matplotlib==3.5.3
     pip install -q git+https://gitlab.com/awarelab/mrunner.git
     pip install -q neptune-client==0.16.17
 
