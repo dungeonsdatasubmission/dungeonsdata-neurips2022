@@ -1,6 +1,6 @@
-import os
 import argparse
 
+from collections import deque
 from pathlib import Path
 
 import moolib
@@ -9,6 +9,9 @@ import omegaconf
 import torch
 import tqdm
 import wandb
+import pandas as pd
+
+from nle import nethack
 
 import hackrl.core
 import hackrl.environment
@@ -40,12 +43,14 @@ def load_model_and_flags(path, device):
 def generate_envpool_rollouts(
     model, 
     flags, 
-    rollouts = 1024, 
+    rollouts=1024, 
     batch_size=512,
     num_actor_cpus = 20,
     num_actor_batches = 2,
     pbar_idx=0, 
     score_target=10000,
+    savedir=None,
+    save_ttyrec_every=0,
     log_to_wandb=False,
 ):
     global ENVS
@@ -57,7 +62,7 @@ def generate_envpool_rollouts(
     device = flags.device
 
     ENVS = moolib.EnvPool(
-        lambda: hackrl.environment.create_env(flags),
+        lambda: hackrl.environment.create_env(flags, savedir=savedir, save_ttyrec_every=save_ttyrec_every),
         num_processes=num_actor_cpus,
         batch_size=batch_size,
         num_batches=num_actor_batches,
@@ -88,8 +93,10 @@ def generate_envpool_rollouts(
     ).to(device)
 
     returns = []
+    scores = []
+    times = []
     lens = []
-    results = [None] * num_actor_batches
+    results = [None, None]
     grand_pbar = tqdm.tqdm(position=0, leave=True)
     pbar = tqdm.tqdm(
         total=batch_size * num_actor_batches * split, position=pbar_idx + 1, leave=True
@@ -98,6 +105,9 @@ def generate_envpool_rollouts(
     action = torch.zeros((num_actor_batches, batch_size)).long().to(device)
     hs = [model.initial_state(batch_size) for _ in range(num_actor_batches)]
     hs = nest.map(lambda x: x.to(device), hs)
+
+    bl_scores = [deque(maxlen=2), deque(maxlen=2)]
+    bl_times = [deque(maxlen=2), deque(maxlen=2)]
 
     totals = torch.sum(rollouts_left).item()
     subtotals = [torch.sum(rollouts_left[i]).item() for i in range(num_actor_batches)]
@@ -114,6 +124,9 @@ def generate_envpool_rollouts(
             env_outputs["prev_action"] = action[i]
             current_reward += env_outputs["reward"]
 
+            bl_scores[i].append(env_outputs["blstats"][:, nethack.NLE_BL_SCORE])
+            bl_times[i].append(env_outputs["blstats"][:, nethack.NLE_BL_TIME])
+
             env_outputs["timesteps"] = timesteps[i]
             env_outputs["max_scores"] = (torch.ones_like(env_outputs["timesteps"]) * score_target).float()
             env_outputs["mask"] = torch.ones_like(env_outputs["timesteps"]).to(torch.bool)
@@ -127,11 +140,15 @@ def generate_envpool_rollouts(
             for j in np.argwhere(done_and_valid.cpu().numpy()):
                 returns.append(current_reward[i][j[0]].item())
                 lens.append(int(env_outputs["timesteps"][j[0]]))
+                scores.append(bl_scores[i][-2][j[0]].item())
+                times.append(bl_times[i][-2][j[0]].item())
                 if log_to_wandb:
                     wandb.log(
                         {
                             "episode_return": returns[-1],
                             "episode_len": lens[-1],
+                            "episode_score": scores[-1],
+                            "episode_time": times[-1],
                         },
                         step=lens[-1]
                     )
@@ -149,33 +166,64 @@ def generate_envpool_rollouts(
             action[i] = outputs["action"].reshape(-1)
             results[i] = ENVS.step(i, action[i])
 
-    if log_to_wandb:
-        fig, ax = plt.subplots()
-        ax.scatter(lens, returns)
-        wandb.log({"scatter_plot": wandb.Image(fig)})
+    results = {
+        "returns": returns,
+        "steps": lens,
+        "scores": scores,
+        "times": times,
+    }
+    return results
 
-    return len(returns), np.mean(returns), np.std(returns), np.median(returns)
 
-
-def evaluate_folder(name, path, device, pbar_idx, output_dir, **kwargs):
-    print(f"{pbar_idx} {name} Using: {path}")
-    save_dir = Path(output_dir) / name
-    save_dir.mkdir(parents=True, exist_ok=True)
+def evaluate_folder(path, device, **kwargs):
     model, flags = load_model_and_flags(path, device)
     returns = generate_envpool_rollouts(
         model=model, 
         flags=flags, 
-        pbar_idx=pbar_idx, 
         **kwargs,
     )
-    return (name, path) + returns
+    return returns
+
+
+def log(results):
+    returns = results["returns"]
+    steps = results["steps"]
+    scores = results["scores"]
+    times = results["times"]
+
+    fig, (ax1, ax2) = plt.subplots(ncols=2, nrows=1)
+    ax1.scatter(steps, returns)
+    ax2.scatter(times, scores)
+    wandb.log({"scatter_plot": wandb.Image(fig)})
+
+    df = pd.DataFrame({"returns": returns, "steps": steps, "scores": scores, "times": times})
+    df.to_csv("rollout_stats.csv", index=None)
+    
+    table = wandb.Table(dataframe=df)
+    wandb.log({"frame": table})
+    wandb.log(        
+        {
+            "eval/mean_episode_return": np.mean(returns),
+            "eval/std_episode_return": np.std(returns),
+            "eval/median_episode_return": np.median(returns),
+            "eval/mean_episode_steps": np.mean(steps),
+            "eval/std_episode_steps": np.std(steps),
+            "eval/median_episode_steps": np.median(steps),
+
+            "eval/mean_episode_scores": np.mean(scores),
+            "eval/std_episode_scores": np.std(scores),
+            "eval/median_episode_scores": np.median(scores),
+            "eval/mean_episode_times": np.mean(times),
+            "eval/std_episode_times": np.std(times),
+            "eval/median_episode_times": np.median(times),
+        },
+    )
 
 
 def parse_args(args=None):
     parser = argparse.ArgumentParser()
-    parser.add_argument("--name", type=str)
+    parser.add_argument("--name", type=str, default="evaluation")
     parser.add_argument("--checkpoint_dir", type=Path)
-    parser.add_argument("--output_dir", type=Path)
     parser.add_argument("--rollouts", type=int, default=1024)
     parser.add_argument("--batch_size", type=int, default=512)
     parser.add_argument("--num_actor_cpus", type=int, default=20)
@@ -184,19 +232,19 @@ def parse_args(args=None):
     parser.add_argument("--score_target", type=float, default=5000)
     # wandb stuff
     parser.add_argument("--wandb", type=bool, default=False)
-    parser.add_argument("--group", type=str, default="group2")
-    parser.add_argument("--exp_tags", type=str, default="eval2")
+    parser.add_argument("--group", type=str, default="eval")
+    parser.add_argument("--exp_tags", type=str, default="eval")
     return parser.parse_known_args(args=args)[0]
 
 
 def main(variant):
     name = variant["name"]
     checkpoint_dir = variant["checkpoint_dir"]
-    output_dir = variant["output_dir"]
-    rollouts = variant["rollouts"]
-    device = variant["device"]
     log_to_wandb = variant["wandb"]
+
     kwargs = dict(
+        device=variant["device"], 
+        rollouts=variant["rollouts"],
         batch_size=variant["batch_size"],
         num_actor_cpus=variant["num_actor_cpus"],
         num_actor_batches=variant["num_actor_batches"],
@@ -211,41 +259,18 @@ def main(variant):
             group=variant["group"],
             entity="gmum",
             name=name,
-        )    
+        )
 
-    results = (name, checkpoint_dir, -1, -1, -1, -1)
+    print(f"Evaluating checkpoint {checkpoint_dir}")
 
-    results = evaluate_folder( 
-        name=name, 
-        path=checkpoint_dir, 
-        device=device, 
+    results = evaluate_folder(
         pbar_idx=0, 
-        output_dir=output_dir,
-        rollouts=rollouts,
+        path=checkpoint_dir, 
         **kwargs
     )
 
-    stats_values = dict(
-        len=results[2],
-        mean=results[3],
-        std=results[4],
-        median=results[5],
-    )
-
-    print(
-        f"{results[0]} Done {results[1]}  Mean {results[3]} ± {results[4]}  | Median {results[5]}"
-    )
-    if results[2] > -2:
-        data = (
-            rollouts,
-        ) + results
-        os.makedirs(f"{output_dir}/{name}/", exist_ok=True)
-        with open(f"{output_dir}/{name}/{checkpoint_dir.split('/')[-1]}.txt", "w") as f:
-            f.write(",".join(str(d) for d in data) + "\n")
-    print("done")
-
     if log_to_wandb:
-        wandb.log(stats_values)
+        log(results)
 
 
 if __name__ == "__main__":

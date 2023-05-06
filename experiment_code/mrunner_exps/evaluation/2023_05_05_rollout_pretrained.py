@@ -1,7 +1,7 @@
 from mrunner.helpers.specification_helper import create_experiments_helper, get_combinations
 from random_word import RandomWords
 
-from hackrl.rollout_dataset import parse_args
+from hackrl.rollout import parse_args
 
 
 name = globals()["script"][:-3]
