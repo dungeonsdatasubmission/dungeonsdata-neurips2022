@@ -29,6 +29,7 @@ config = {
     "checkpoint_step": 100_000_000,
     "wandb": True,
     "checkpoint_dir": "/path/to/checkpoint/dir",
+    "exp_tags": ["monk-APPO"], 
 }
 config = combine_config_with_defaults(config)
 
@@ -42,7 +43,6 @@ params_grid = [
         # important, we need the same group as experiment we want to compare with
         'group': [f"monk-APPO_{i}"], 
         # important, it is best to set for the same name as experiment we want to compare with
-        "exp_tags": ["monk-APPO"], 
     } for i in range(5)
 ]
 
