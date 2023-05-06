@@ -27,15 +27,16 @@ def load_model_and_flags(path, device):
     flags = omegaconf.OmegaConf.create(load_data["flags"])
     flags.device = device
     model = hackrl.models.create_model(flags, device)
+
     if flags.use_kickstarting:
         print("Kickstarting")
-        t_data = torch.load(flags.kickstarting_path)
-        t_flags = omegaconf.OmegaConf.create(t_data["flags"])
-        teacher = hackrl.models.create_model(t_flags, flags.device)
-        # teacher.load_state_dict(load_data["learner_state"]["model"])
-        model = hackrl.models.KickStarter(
-            model, teacher, run_teacher_hs=flags.run_teacher_hs
-        )
+        # remove teacher weights
+        student_params = dict(filter(lambda x: x[0].startswith("student"), load_data["learner_state"]["model"].items()))
+        # modify keys
+        student_params = dict(map(lambda x: (x[0].removeprefix("student."), x[1]), student_params.items()))
+        model.load_state_dict(student_params)
+        return model, flags
+
     model.load_state_dict(load_data["learner_state"]["model"])
     return model, flags
 
