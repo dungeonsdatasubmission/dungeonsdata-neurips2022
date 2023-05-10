@@ -143,6 +143,7 @@ dataset: autoascend
 dataset_demigod: False
 dataset_highscore: False
 dataset_midscore: False
+dataset_deep: False
 dataset_warmup: 0
 dataset_reset: 0
 dataset_bootstrap_actions: False

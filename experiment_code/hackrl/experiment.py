@@ -253,6 +253,8 @@ def make_ttyrec_envpool(threadpool, flags):
         subselect.append(" points>10000")
     if flags.dataset_midscore:
         subselect.append(" points>1000 AND points<10000")
+    if flags.dataset_deep:
+        subselect.append(" maxlvl>1")
 
     if subselect:
         kwargs["subselect_sql"] = "SELECT gameid FROM games WHERE " + "AND".join(
