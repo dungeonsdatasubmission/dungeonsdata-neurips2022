@@ -1088,19 +1088,6 @@ def main(cfg):
             logging.info("Stopping training after %i steps", steps)
             break
 
-        if FLAGS.wandb:
-            if FLAGS.use_kickstarting:
-                wandb.log({"debug/student_core_weight":model.student.core.weight_hh_l0.detach().cpu()[0,0] }, step=steps)
-                wandb.log({"debug/student_policy_weight":model.student.policy.weight.detach().cpu()[0,0] }, step=steps)
-                wandb.log({"debug/student_policy_weight":model.student.policy.weight.detach().cpu()[0,0] }, step=steps)
-                wandb.log({"debug/student_baseline_weight":model.student.baseline.weight.detach().cpu()[0,0] }, step=steps)
-                wandb.log({"debug/teacher_core_weight":model.teacher.core.weight_hh_l0.detach().cpu()[0,0] }, step=steps)
-                wandb.log({"debug/teacher_policy_weight":model.teacher.policy.weight.detach().cpu()[0,0] }, step=steps)
-                wandb.log({"debug/teacher_baseline_weight":model.teacher.baseline.weight.detach().cpu()[0,0] }, step=steps)
-            else:
-                wandb.log({"debug/core_weight":model.core.weight_hh_l0.detach().cpu()[0,0] }, step=steps)
-                wandb.log({"debug/policy_weight":model.policy.weight.detach().cpu()[0,0] }, step=steps)
-                wandb.log({"debug/baseline_weight":model.baseline.weight.detach().cpu()[0,0] }, step=steps)
         rpc_group.update()
         accumulator.update()
         if accumulator.wants_state():
