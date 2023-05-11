@@ -774,16 +774,11 @@ def compute_gradients(data, learner_state, stats):
         stats["inverse_loss"] += inverse_loss.item()
 
     if FLAGS.use_kickstarting:
-        if FLAGS.log_kickstarting:
-            kickstarting_loss = compute_kickstarting_loss(
-                learner_outputs["policy_logits"],
-                actor_outputs["kick_policy_logits"],
-            )
-        else:
-            kickstarting_loss = FLAGS.kickstarting_loss * compute_kickstarting_loss(
-                learner_outputs["policy_logits"],
-                actor_outputs["kick_policy_logits"],
-            )
+        kickstarting_loss = FLAGS.kickstarting_loss * compute_kickstarting_loss(
+            learner_outputs["policy_logits"],
+            actor_outputs["kick_policy_logits"],
+        )
+        if not FLAGS.log_kickstarting:
             FLAGS.kickstarting_loss *= FLAGS.kickstarting_decay
             total_loss += kickstarting_loss
         stats["kickstarting_loss"] += kickstarting_loss.item()
@@ -799,16 +794,11 @@ def compute_gradients(data, learner_state, stats):
             lambda t: t.detach(), TTYREC_HIDDEN_STATE[idx]
         )
 
-        if FLAGS.log_kickstarting_bc:
-            kickstarting_loss_bc = compute_kickstarting_loss(
-                ttyrec_predictions["policy_logits"],
-                ttyrec_predictions["kick_policy_logits"],
-            )
-        else:
-            kickstarting_loss_bc = FLAGS.kickstarting_loss_bc * compute_kickstarting_loss(
-                ttyrec_predictions["policy_logits"],
-                ttyrec_predictions["kick_policy_logits"],
-            )
+        kickstarting_loss_bc = FLAGS.kickstarting_loss_bc * compute_kickstarting_loss(
+            ttyrec_predictions["policy_logits"],
+            ttyrec_predictions["kick_policy_logits"],
+        )
+        if not FLAGS.log_kickstarting_bc:
             FLAGS.kickstarting_loss_bc *= FLAGS.kickstarting_decay_bc
             total_loss += kickstarting_loss_bc
 
