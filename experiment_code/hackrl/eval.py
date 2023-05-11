@@ -1,4 +1,5 @@
 import argparse
+import time
 
 from collections import deque
 from pathlib import Path
@@ -50,6 +51,7 @@ def load_model_flags_and_step(path, device):
     return model, flags, step
 
 
+@torch.no_grad()
 def generate_envpool_rollouts(
     model,
     flags,
@@ -191,6 +193,7 @@ def generate_envpool_rollouts(
     return results
 
 
+@torch.no_grad()
 def continue_envpool_rollouts(
     envs,
     model,
@@ -200,7 +203,7 @@ def continue_envpool_rollouts(
     num_actor_batches=2,
     pbar_idx=0,
     score_target=10000,
-    eval_step_results = [None, None],
+    action=None,
 ):
     # NB: We do NOT want to generate the first N rollouts from B batch
     # of envs since this will bias short episodes.
@@ -250,21 +253,24 @@ def continue_envpool_rollouts(
         total=batch_size * num_actor_batches * split, position=pbar_idx + 1, leave=True
     )
 
-    action = torch.zeros((num_actor_batches, batch_size)).long().to(device)
+    if action is None:
+        action = torch.zeros((num_actor_batches, batch_size)).long().to(device)
+    
     hs = [model.initial_state(batch_size) for _ in range(num_actor_batches)]
     hs = nest.map(lambda x: x.to(device), hs)
 
     bl_scores = [deque(maxlen=2), deque(maxlen=2)]
     bl_times = [deque(maxlen=2), deque(maxlen=2)]
+    results = [None, None]
 
+    last_log = time.time()
     totals = torch.sum(rollouts_left).item()
     subtotals = [torch.sum(rollouts_left[i]).item() for i in range(num_actor_batches)]
     while totals > 0:
         grand_pbar.update(1)
         for i in range(num_actor_batches):
-            if eval_step_results[i] is None:
-                eval_step_results[i] = envs.step(i, action[i])
-            outputs = eval_step_results[i].result()
+            results[i] = envs.step(i, action[i])
+            outputs = results[i].result()
 
             env_outputs = nest.map(lambda t: t.to(device, copy=True), outputs)
             env_outputs["prev_action"] = action[i]
@@ -306,7 +312,14 @@ def continue_envpool_rollouts(
             with torch.no_grad():
                 outputs, hs[i] = model(env_outputs, hs[i])
             action[i] = outputs["action"].reshape(-1)
-            eval_step_results[i] = envs.step(i, action[i])
+
+        if time.time() - last_log >= 60:
+            last_log = time.time()
+            df = pd.DataFrame(
+                {"returns": returns, "steps": lens, "scores": scores, "times": times}
+            )
+            table = wandb.Table(dataframe=df)
+            wandb.log({f"frame_{time.time()}": table})
 
     data = {
         "returns": returns,
@@ -314,12 +327,12 @@ def continue_envpool_rollouts(
         "scores": scores,
         "times": times,
     }
-    return data, eval_step_results
+    return data, action
 
 
-def evaluate_model(envs, model, eval_step_results, **kwargs):
-    data, eval_step_results = continue_envpool_rollouts(envs, model, eval_step_results=eval_step_results, **kwargs)
-    return results_to_dict(data), eval_step_results
+def evaluate_model(envs, model, action, **kwargs):
+    data, action = continue_envpool_rollouts(envs, model, action=action, **kwargs)
+    return results_to_dict(data), action
 
 
 def evaluate_folder(path, device, **kwargs):

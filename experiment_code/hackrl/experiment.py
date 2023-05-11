@@ -1104,7 +1104,7 @@ def main(cfg):
     unfreezed = False
     checkpoint_steps = -1
     eval_steps = -1
-    eval_step_results = [None, None]
+    eval_action = None
     while not terminate:
         prev_now = now
         now = time.time()
@@ -1203,22 +1203,6 @@ def main(cfg):
                 )
                 checkpoint_steps = steps // FLAGS.checkpoint_save_every
 
-            if (steps // FLAGS.eval_checkpoint_every > eval_steps) and not accumulator.has_gradients():
-                eval_kwargs = {
-                    "rollouts": FLAGS.eval_rollouts,
-                    "batch_size": FLAGS.eval_batch_size,
-                    "device": FLAGS.device,
-                    "score_target": score_target,
-                    "num_actor_batches": FLAGS.num_actor_batches,
-                }
-                
-                eval_results, eval_step_results = evaluate_model(eval_envs, model, eval_step_results=eval_step_results, **eval_kwargs)
-
-                if FLAGS.wandb:
-                    wandb.log(eval_results, step=steps)
-
-                eval_steps = steps // FLAGS.eval_checkpoint_every
-
         if accumulator.has_gradients():
             gradient_stats = accumulator.get_gradient_stats()
             stats["virtual_batch_size"] += gradient_stats["batch_size"]
@@ -1232,13 +1216,31 @@ def main(cfg):
             if accumulator.wants_gradients():
                 accumulator.skip_gradients()
 
+            if (steps // FLAGS.eval_checkpoint_every > eval_steps) and is_leader:
+                eval_kwargs = {
+                    "rollouts": FLAGS.eval_rollouts,
+                    "batch_size": FLAGS.eval_batch_size,
+                    "device": FLAGS.device,
+                    "score_target": score_target,
+                    "num_actor_batches": FLAGS.num_actor_batches,
+                }
+                
+                eval_results, eval_action = evaluate_model(eval_envs, model, action=eval_action, **eval_kwargs)
+
+                if FLAGS.wandb:
+                    wandb.log(eval_results, step=steps)
+
+                eval_steps = steps // FLAGS.eval_checkpoint_every
+                # this is for smooth logging
+                now = time.time()
+                last_log = now
+
             # Generate data.
             cur_index = next_env_index
             next_env_index = (next_env_index + 1) % FLAGS.num_actor_batches
 
             env_state = env_states[cur_index]
-            if env_state.future is None:
-                env_state.future = envs.step(cur_index, env_state.prev_action)
+            env_state.future = envs.step(cur_index, env_state.prev_action)
             cpu_env_outputs = env_state.future.result()
 
             env_outputs = nest.map(
@@ -1261,7 +1263,6 @@ def main(cfg):
             action = actor_outputs["action"]
             env_state.update(cpu_env_outputs, action, stats)
             del cpu_env_outputs  # envs.step invalidates cpu_env_outputs.
-            env_state.future = envs.step(cur_index, action)
 
             stats["env_act_steps"] += action.numel()
 
