@@ -30,6 +30,9 @@ params_grid = [
         "seed":  list(range(1)),
         "kickstarting_loss": [0.2],
         "kickstarting_decay": [0.9995, 0.9996, 0.9996, 0.9997, 0.9998, 0.9999],
+        "unfreeze_actor_steps": [50_000_000],
+        "use_checkpoint_actor": [True],
+        "model_checkpoint_path": ["/net/tscratch/people/plgmostaszewski/dungeonsdata-neurips2022/experiment_code/monk-AA-BC/checkpoint.tar"],
     },
 ]
 
