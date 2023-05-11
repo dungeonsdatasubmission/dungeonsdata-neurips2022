@@ -34,29 +34,25 @@ config = {
 }
 config = combine_config_with_defaults(config)
 
-root_dir = Path(
-    "/net/pr2/projects/plgrid/plgg_pw_crl/mostaszewski/mrunner_scratch/nle/06_05-10_51-gallant_sammet"
-)
-checkpoint_step = 100_000_000
+root_dirs = [
+    Path("/net/pr2/projects/plgrid/plgg_pw_crl/mostaszewski/mrunner_scratch/nle/03_05-13_31-relaxed_cori"),
+    Path("/net/pr2/projects/plgrid/plgg_pw_crl/mostaszewski/mrunner_scratch/nle/06_05-11_07-elastic_mccarthy"),
+    Path("/net/pr2/projects/plgrid/plgg_pw_crl/mostaszewski/mrunner_scratch/nle/06_05-10_51-gallant_sammet"),
+    Path("/net/pr2/projects/plgrid/plgg_pw_crl/mostaszewski/mrunner_scratch/nle/06_05-10_51-youthful_kare"),
+    Path("/net/pr2/projects/plgrid/plgg_pw_crl/mostaszewski/mrunner_scratch/nle/06_05-10_50-elastic_bhabha"),
+    Path("/net/pr2/projects/plgrid/plgg_pw_crl/mostaszewski/mrunner_scratch/nle/06_05-10_50-modest_euclid"),
+]
+checkpoint_step = 50000000
 
-group_paths = get_checkpoint_paths(root_dir)
-
-# params different between exps
 params_grid = []
-for group_path in group_paths:
-    group_path = Path(group_path)
-    print(group_path)
-    params_grid.append(
-        {
-            "checkpoint_dir": [str(group_path / "checkpoint.tar")],
-        }
-    )
-
-    for ckpt in range(1, 20):
-        step = ckpt * checkpoint_step
+for root_dir in root_dirs:
+    group_paths = get_checkpoint_paths(root_dir)
+    for group_path in group_paths:
+        group_path = Path(group_path)
+        print(group_path)
         params_grid.append(
             {
-                "checkpoint_dir": [str(group_path / f"checkpoint_v{step}")],
+                "checkpoint_dir": [str(group_path / f"checkpoint_v{checkpoint_step}")],
             }
         )
 

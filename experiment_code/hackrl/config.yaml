@@ -159,3 +159,8 @@ ttyrec_cpus: 10
 use_checkpoint_actor: False
 model_checkpoint_path: /checkpoint/checkpoint.tar
 unfreeze_actor_steps: 0
+
+eval_checkpoint_every: 100_000_000
+eval_rollouts: 1024
+eval_batch_size: 256
+eval_wandb: False

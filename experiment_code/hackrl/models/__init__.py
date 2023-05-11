@@ -81,7 +81,7 @@ def create_model(flags, device):
 
     initialize_weights(flags, model)
 
-    if flags['use_checkpoint_actor']:
+    if flags.get('use_checkpoint_actor', None):
 
         def distil_actor_nad_core(load_data):
             return {

@@ -35,7 +35,7 @@ config = {
 config = combine_config_with_defaults(config)
 
 root_dir = Path(
-    "/net/pr2/projects/plgrid/plgg_pw_crl/mostaszewski/mrunner_scratch/nle/06_05-10_51-gallant_sammet"
+    "/net/pr2/projects/plgrid/plgg_pw_crl/mostaszewski/mrunner_scratch/nle/06_05-10_51-youthful_kare"
 )
 checkpoint_step = 100_000_000
 

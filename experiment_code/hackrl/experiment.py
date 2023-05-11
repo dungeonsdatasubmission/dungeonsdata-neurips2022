@@ -29,6 +29,7 @@ import hackrl.models
 
 from hackrl.utils.dataset_scores import get_dataset_scores
 from hackrl.utils.utils import set_seed
+from hackrl.eval import evaluate_model
 
 import render_utils
 from hackrl.core import nest
@@ -897,6 +898,12 @@ def main(cfg):
         batch_size=FLAGS.actor_batch_size,
         num_batches=FLAGS.num_actor_batches,
     )
+    eval_envs = moolib.EnvPool(
+        lambda: hackrl.environment.create_env(FLAGS),
+        num_processes=FLAGS.num_actor_cpus,
+        batch_size=FLAGS.eval_batch_size,
+        num_batches=FLAGS.num_actor_batches,
+    )
 
     if FLAGS.use_kickstarting:
         student = hackrl.models.create_model(FLAGS, FLAGS.device)
@@ -1071,7 +1078,9 @@ def main(cfg):
     is_leader = False
     is_connected = False
     unfreezed = False
-    checkpoint_steps = 0
+    checkpoint_steps = -1
+    eval_steps = -1
+    eval_step_results = [None, None]
     while not terminate:
         prev_now = now
         now = time.time()
@@ -1169,6 +1178,22 @@ def main(cfg):
                     learner_state
                 )
                 checkpoint_steps = steps // FLAGS.checkpoint_save_every
+
+            if (steps // FLAGS.eval_checkpoint_every > eval_steps) and not accumulator.has_gradients():
+                eval_kwargs = {
+                    "rollouts": FLAGS.eval_rollouts,
+                    "batch_size": FLAGS.eval_batch_size,
+                    "device": FLAGS.device,
+                    "score_target": score_target,
+                    "num_actor_batches": FLAGS.num_actor_batches,
+                }
+                
+                eval_results, eval_step_results = evaluate_model(eval_envs, model, eval_step_results=eval_step_results, **eval_kwargs)
+
+                if FLAGS.wandb:
+                    wandb.log(eval_results, step=steps)
+
+                eval_steps = steps // FLAGS.eval_checkpoint_every
 
         if accumulator.has_gradients():
             gradient_stats = accumulator.get_gradient_stats()
