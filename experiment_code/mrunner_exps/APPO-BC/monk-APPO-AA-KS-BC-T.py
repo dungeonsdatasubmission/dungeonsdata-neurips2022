@@ -22,7 +22,7 @@ config = {
     'group': "monk-APPO-AA-BC",
     "character": "mon-hum-neu-mal",
     "use_checkpoint_actor": False,
-    "use_bc": True,
+    "use_kickstarting_bc": True,
     "kickstarting_path": "/net/tscratch/people/plgmostaszewski/dungeonsdata-neurips2022/experiment_code/monk-AA-BC/checkpoint.tar",
 }
 

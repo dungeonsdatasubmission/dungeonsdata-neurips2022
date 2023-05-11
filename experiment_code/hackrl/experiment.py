@@ -789,7 +789,7 @@ def compute_gradients(data, learner_state, stats):
         stats["kickstarting_loss"] += kickstarting_loss.item()
         stats["kickstarting_coeff"] += FLAGS.kickstarting_loss
 
-    if FLAGS.use_bc:
+    if FLAGS.use_kickstarting_bc:
         ttyrec_data = TTYREC_ENVPOOL.result()
         idx = TTYREC_ENVPOOL.idx
         ttyrec_predictions, TTYREC_HIDDEN_STATE[idx] = model(
@@ -799,24 +799,21 @@ def compute_gradients(data, learner_state, stats):
             lambda t: t.detach(), TTYREC_HIDDEN_STATE[idx]
         )
 
-        student_logits = torch.flatten(ttyrec_predictions["policy_logits"], 0, 1)
-        teacher_logits = torch.flatten(ttyrec_predictions["kick_policy_logits"], 0, 1)
-
         if FLAGS.log_kickstarting_bc:
-            kickstarting_loss = compute_kickstarting_loss(
-                student_logits,
-                teacher_logits,
+            kickstarting_loss_bc = compute_kickstarting_loss(
+                ttyrec_predictions["policy_logits"],
+                ttyrec_predictions["kick_policy_logits"],
             )
         else:
-            kickstarting_loss = FLAGS.kickstarting_loss * compute_kickstarting_loss(
-                student_logits,
-                teacher_logits,
+            kickstarting_loss_bc = FLAGS.kickstarting_loss_bc * compute_kickstarting_loss(
+                ttyrec_predictions["policy_logits"],
+                ttyrec_predictions["kick_policy_logits"],
             )
-            FLAGS.kickstarting_loss *= FLAGS.kickstarting_decay
-            total_loss += kickstarting_loss
+            FLAGS.kickstarting_loss_bc *= FLAGS.kickstarting_decay_bc
+            total_loss += kickstarting_loss_bc
 
-        stats["bc_kickstarting_loss"] += kickstarting_loss.item()
-        stats["bc_kickstarting_coeff"] += FLAGS.kickstarting_loss
+        stats["kickstarting_loss_bc"] += kickstarting_loss_bc.item()
+        stats["kickstarting_coeff_bc"] += FLAGS.kickstarting_loss_bc
 
     total_loss.backward()
 
@@ -940,7 +937,7 @@ def main(cfg):
         num_batches=FLAGS.num_actor_batches,
     )
 
-    if FLAGS.use_kickstarting or FLAGS.use_bc:
+    if FLAGS.use_kickstarting or FLAGS.use_kickstarting_bc:
         student = hackrl.models.create_model(FLAGS, FLAGS.device)
         load_data = torch.load(FLAGS.kickstarting_path)
         t_flags = omegaconf.OmegaConf.create(load_data["flags"])
@@ -1025,6 +1022,8 @@ def main(cfg):
         "clipped_policy_fraction": StatMean(),
         "kickstarting_loss": StatMean(),
         "kickstarting_coeff": StatMean(),
+        "kickstarting_loss_bc": StatMean(),
+        "kickstarting_coeff_bc": StatMean(),
         "inverse_loss": StatMean(),
         "inverse_prediction_accuracy": StatMean(),
         "random_inverse_loss": StatMean(),
@@ -1077,7 +1076,7 @@ def main(cfg):
         logging.info("Optimising CuDNN kernels")
         torch.backends.cudnn.benchmark = True
 
-    if FLAGS.supervised_loss or FLAGS.behavioural_clone or FLAGS.use_bc:
+    if FLAGS.supervised_loss or FLAGS.behavioural_clone or FLAGS.use_kickstarting_bc:
         global TTYREC_ENVPOOL, TTYREC_HIDDEN_STATE
         tp = concurrent.futures.ThreadPoolExecutor(max_workers=FLAGS.ttyrec_cpus)
         TTYREC_HIDDEN_STATE = []
@@ -1122,7 +1121,7 @@ def main(cfg):
 
         steps = learner_state.global_stats["env_train_steps"].result()
         if not unfreezed and steps > FLAGS.unfreeze_actor_steps:
-            if FLAGS.use_kickstarting or FLAGS.use_bc:
+            if FLAGS.use_kickstarting or FLAGS.use_kickstarting_bc:
                 hackrl.models.unfreeze(model.student)
             else:
                 hackrl.models.unfreeze(model)
