@@ -112,14 +112,14 @@ baseline:
 
 run_teacher_hs: False
 use_kickstarting: False
-log_kickstarting: False
 use_kickstarting_bc: False
-log_kickstarting_bc: False
 kickstarting_loss: 1.0
 kickstarting_decay: 1.0
 kickstarting_loss_bc: 1.0
 kickstarting_decay_bc: 1.0
 kickstarting_path: /net/pr2/projects/plgrid/plgggmum_crl/bcupial/monk-AA-BC/checkpoint.tar
+log_forgetting: False
+forgetting_dataset: bc1
 
 use_tty_only: true  # Use only tty observations. 'False' ~ 10% faster & higher score
 use_prev_action: true

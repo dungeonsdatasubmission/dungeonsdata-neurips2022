@@ -27,6 +27,9 @@ params_grid = [
     {
         "seed":  list(range(5)),
         "kickstarting_loss": [0.5],
+        # log forgetting
+        "log_forgetting": [True],
+        "forgetting_dataset": ["bc1"],
     },
 ]
 

@@ -31,7 +31,7 @@ def load_model_flags_and_step(path, device):
     model = hackrl.models.create_model(flags, device)
     step = load_data["learner_state"]["global_stats"]["steps_done"]["value"]
 
-    if flags.use_kickstarting or flags.use_kickstarting_bc:
+    if flags.use_kickstarting or flags.use_kickstarting_bc or flags.log_forgetting:
         print("Kickstarting")
         # remove teacher weights
         student_params = dict(

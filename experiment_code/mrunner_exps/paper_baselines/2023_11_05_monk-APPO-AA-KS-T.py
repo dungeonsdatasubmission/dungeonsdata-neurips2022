@@ -31,6 +31,9 @@ params_grid = [
         "unfreeze_actor_steps": [0],
         "use_checkpoint_actor": [True],
         "model_checkpoint_path": ["/net/pr2/projects/plgrid/plgg_pw_crl/mostaszewski/monk-AA-BC/checkpoint.tar"],
+        # log forgetting
+        "log_forgetting": [True],
+        "forgetting_dataset": ["bc1"],
     },
 ]
 

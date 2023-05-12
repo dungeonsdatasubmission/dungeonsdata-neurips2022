@@ -28,9 +28,9 @@ params_grid = [
         "supervised_loss": [0.5],
         # log forgetting
         "kickstarting_path": ["/net/pr2/projects/plgrid/plgg_pw_crl/mostaszewski/monk-AA-BC/checkpoint.tar"],
-        "kickstarting_loss": [0.5],
-        "use_kickstarting": [True],
-        "log_kickstarting": [True],
+        # log forgetting
+        "log_forgetting": [True],
+        "forgetting_dataset": ["bc1"],
     },
 ]
 
