@@ -82,19 +82,11 @@ def create_model(flags, device):
     initialize_weights(flags, model)
 
     if flags.get('use_checkpoint_actor', None):
-
-        def distil_actor_nad_core(load_data):
-            return {
-                key: elem
-                for key, elem in load_data["learner_state"]["model"].items()
-                if "baseline" not in key
-            }
-
         load_data = torch.load(
             flags["model_checkpoint_path"],
             map_location=torch.device(device),
         )
-        model.load_state_dict(distil_actor_nad_core(load_data), strict=False)
+        model.load_state_dict(load_data["learner_state"]["model"], strict=False)
         freeze(model)
         unfreeze_selected(model, ["baseline", "embed_ln"])
 
