@@ -9,6 +9,8 @@ import pprint
 import signal
 import socket
 import time
+import tempfile
+import shutil
 from typing import Optional
 
 import coolname
@@ -1078,6 +1080,9 @@ def main(cfg):
             "Got signal %s, quitting!",
             signal.strsignal(signum) if hasattr(signal, "strsignal") else signum,
         )
+        logging.info(f"Removing all temporary files in {tempfile.tempdir}")
+        shutil.rmtree(tempfile.tempdir)
+
         terminate = True
         previous_handler = previous_signal_handler[signum]
         if previous_handler is not None:
@@ -1336,4 +1341,11 @@ def main(cfg):
 
 
 if __name__ == "__main__":
-    main()
+    tempdir = tempfile.mkdtemp()
+    tempfile.tempdir = tempdir 
+
+    try:
+        main()
+    finally:
+        logging.info(f"Removing all temporary files in {tempfile.tempdir}")
+        shutil.rmtree(tempfile.tempdir)

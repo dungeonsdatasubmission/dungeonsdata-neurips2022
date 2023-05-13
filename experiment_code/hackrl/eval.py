@@ -1,5 +1,6 @@
 import argparse
-import time
+import shutil
+import tempfile
 
 from collections import deque
 from pathlib import Path
@@ -437,8 +438,13 @@ def main(variant):
         json.dump(results_to_dict(results), file)
 
 
-
-
 if __name__ == "__main__":
-    args = vars(parse_args())
-    main(variant=args)
+    tempdir = tempfile.mkdtemp()
+    tempfile.tempdir = tempdir 
+
+    try:
+        args = vars(parse_args())
+        main(variant=args)
+    finally:
+        logging.info(f"Removing all temporary files in {tempfile.tempdir}")
+        shutil.rmtree(tempfile.tempdir)
