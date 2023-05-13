@@ -952,14 +952,16 @@ def main(cfg):
         num_batches=FLAGS.num_actor_batches,
     )
 
+    # don't use checkpoint actor if we will be loading model from checkpoint
+    if os.path.exists(os.path.join(FLAGS.savedir, "checkpoint.tar")):
+        FLAGS.use_checkpoint_actor = False
+
     if FLAGS.use_kickstarting or FLAGS.use_kickstarting_bc or FLAGS.log_forgetting:
         student = hackrl.models.create_model(FLAGS, FLAGS.device)
         load_data = torch.load(FLAGS.kickstarting_path)
         t_flags = omegaconf.OmegaConf.create(load_data["flags"])
-       
-        t_flags.use_checkpoint_actor = FLAGS['use_checkpoint_actor']
-        t_flags.model_checkpoint_path = FLAGS["model_checkpoint_path"]
-        
+        # don't use checkpoint actor if we will be loading model from kickstarting_path
+        t_flags.use_checkpoint_actor = False
         teacher = hackrl.models.create_model(t_flags, FLAGS.device)
         teacher.load_state_dict(load_data["learner_state"]["model"])
         model = hackrl.models.KickStarter(
