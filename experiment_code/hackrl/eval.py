@@ -160,16 +160,6 @@ def generate_envpool_rollouts(
                 lens.append(int(env_outputs["timesteps"][j[0]]))
                 scores.append(bl_scores[i][-2][j[0]].item())
                 times.append(bl_times[i][-2][j[0]].item())
-                # if log_to_wandb:
-                #     wandb.log(
-                #         {
-                #             "episode_return": returns[-1],
-                #             "episode_len": lens[-1],
-                #             "episode_score": scores[-1],
-                #             "episode_time": times[-1],
-                #         },
-                #         step=lens[-1]
-                #     )
 
             current_reward[i] *= 1 - env_outputs["done"].int()
             timesteps[i] += 1
@@ -204,6 +194,7 @@ def continue_envpool_rollouts(
     pbar_idx=0,
     score_target=10000,
     action=None,
+    log_to_wandb=False,
 ):
     # NB: We do NOT want to generate the first N rollouts from B batch
     # of envs since this will bias short episodes.
@@ -263,7 +254,6 @@ def continue_envpool_rollouts(
     bl_times = [deque(maxlen=2), deque(maxlen=2)]
     results = [None, None]
 
-    last_log = time.time()
     totals = torch.sum(rollouts_left).item()
     subtotals = [torch.sum(rollouts_left[i]).item() for i in range(num_actor_batches)]
     while totals > 0:
@@ -299,6 +289,16 @@ def continue_envpool_rollouts(
                 lens.append(int(env_outputs["timesteps"][j[0]]))
                 scores.append(bl_scores[i][-2][j[0]].item())
                 times.append(bl_times[i][-2][j[0]].item())
+                if log_to_wandb:
+                    wandb.log(
+                        {
+                            "test/episode_return": returns[-1],
+                            "test/episode_len": lens[-1],
+                            "test/episode_score": scores[-1],
+                            "test/episode_time": times[-1],
+                        },
+                    )
+
 
             current_reward[i] *= 1 - env_outputs["done"].int()
             timesteps[i] += 1
@@ -312,14 +312,6 @@ def continue_envpool_rollouts(
             with torch.no_grad():
                 outputs, hs[i] = model(env_outputs, hs[i])
             action[i] = outputs["action"].reshape(-1)
-
-        if time.time() - last_log >= 60:
-            last_log = time.time()
-            df = pd.DataFrame(
-                {"returns": returns, "steps": lens, "scores": scores, "times": times}
-            )
-            table = wandb.Table(dataframe=df)
-            wandb.log({f"frame_{time.time()}": table})
 
     data = {
         "returns": returns,

@@ -103,12 +103,12 @@ class TtyrecEnvPool:
                 "prev_action": torch.zeros(self.prev_action_shape, dtype=torch.uint8),
             }
 
-            gameids = np.array(list(map(int, self.dataset_scores.keys()))).max()
-            max_scores = np.zeros(gameids + 1)
+            # gameids = np.array(list(map(int, self.dataset_scores.keys()))).max()
+            # max_scores = np.zeros(gameids + 1)
 
-            for key, value in self.dataset_scores.items():
-                max_scores[int(key)] = value
-            max_scores = torch.from_numpy(max_scores).to(torch.float32)
+            # for key, value in self.dataset_scores.items():
+            #     max_scores[int(key)] = value
+            # max_scores = torch.from_numpy(max_scores).to(torch.float32)
 
             prev_action = torch.zeros(
                 (self.ttyrec_batch_size, 1), dtype=torch.uint8
@@ -144,7 +144,7 @@ class TtyrecEnvPool:
                         "screen_image": mb_tensors["screen_image"],
                         "done": mb_tensors["done"].bool(),
                         "timesteps": mb_tensors["timestamps"].float(),
-                        "max_scores": max_scores[mb["gameids"].flatten()].reshape(mb["gameids"].shape).float(),
+                        # "max_scores": max_scores[mb["gameids"].flatten()].reshape(mb["gameids"].shape).float(),
                         "mask": torch.ones_like(mb_tensors["timestamps"]).bool()
                     }
 
@@ -871,7 +871,8 @@ def log(stats, step, is_global=False):
         record.log_to_file(**stats_values)
 
     if FLAGS.wandb:
-        wandb.log(stats_values, step=step)
+        # wandb.log(stats_values, step=step)
+        wandb.log(stats_values)
 
 
 def save_checkpoint(checkpoint_path, learner_state):
@@ -985,6 +986,11 @@ def main(cfg):
             entity=FLAGS.entity,
             name=FLAGS.local_name,
         )
+
+        wandb.define_metric("global/env_train_steps")
+        wandb.define_metric("global/*", step_metric="global/env_train_steps")
+        wandb.define_metric("local/*", step_metric="global/env_train_steps")
+        wandb.define_metric("eval/*", step_metric="global/env_train_steps")
 
     env_states = [EnvBatchState(FLAGS, model) for _ in range(FLAGS.num_actor_batches)]
 
@@ -1258,12 +1264,15 @@ def main(cfg):
                     "device": FLAGS.device,
                     "score_target": score_target,
                     "num_actor_batches": FLAGS.num_actor_batches,
+                    "log_to_wandb": FLAGS.wandb,
                 }
                 
                 eval_results, eval_action = evaluate_model(eval_envs, model, action=eval_action, **eval_kwargs)
+                eval_results["global/env_train_steps"] = stats["env_train_steps"].result()
 
                 if FLAGS.wandb:
-                    wandb.log(eval_results, step=steps)
+                    # wandb.log(eval_results, step=steps)
+                    wandb.log(eval_results)
 
                 eval_steps = steps // FLAGS.eval_checkpoint_every
                 # this is for smooth logging
@@ -1284,7 +1293,7 @@ def main(cfg):
 
             env_outputs["prev_action"] = env_state.prev_action
             env_outputs["timesteps"] = env_state.timesteps
-            env_outputs["max_scores"] = (torch.ones_like(env_state.timesteps) * score_target).float()
+            # env_outputs["max_scores"] = (torch.ones_like(env_state.timesteps) * score_target).float()
             env_outputs["mask"] = torch.ones_like(env_state.timesteps).to(torch.bool)
             env_outputs["scores"] = env_state.running_reward
             prev_core_state = env_state.core_state
