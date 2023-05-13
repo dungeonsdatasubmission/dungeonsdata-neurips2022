@@ -1,6 +1,7 @@
 import argparse
 import shutil
 import tempfile
+import logging
 
 from collections import deque
 from pathlib import Path
@@ -32,7 +33,11 @@ def load_model_flags_and_step(path, device):
     model = hackrl.models.create_model(flags, device)
     step = load_data["learner_state"]["global_stats"]["steps_done"]["value"]
 
-    if flags.use_kickstarting or flags.use_kickstarting_bc or flags.log_forgetting:
+    if (
+        flags.use_kickstarting
+        or flags.get("use_kickstarting_bc")
+        or flags.get("log_forgetting")
+    ):
         print("Kickstarting")
         # remove teacher weights
         student_params = dict(
@@ -247,7 +252,7 @@ def continue_envpool_rollouts(
 
     if action is None:
         action = torch.zeros((num_actor_batches, batch_size)).long().to(device)
-    
+
     hs = [model.initial_state(batch_size) for _ in range(num_actor_batches)]
     hs = nest.map(lambda x: x.to(device), hs)
 
@@ -279,8 +284,14 @@ def continue_envpool_rollouts(
             )
             env_outputs["scores"] = current_reward[i]
 
-            done_but_invalid = env_outputs["done"].int() * rollouts_invalid[i].bool().int()
-            done_and_valid = env_outputs["done"].int() * rollouts_left[i].bool().int() * torch.logical_not(rollouts_invalid[i].bool()).int()
+            done_but_invalid = (
+                env_outputs["done"].int() * rollouts_invalid[i].bool().int()
+            )
+            done_and_valid = (
+                env_outputs["done"].int()
+                * rollouts_left[i].bool().int()
+                * torch.logical_not(rollouts_invalid[i].bool()).int()
+            )
             finished = torch.sum(done_and_valid).item()
             totals -= finished
             subtotals[i] -= finished
@@ -299,7 +310,6 @@ def continue_envpool_rollouts(
                             "test/episode_time": times[-1],
                         },
                     )
-
 
             current_reward[i] *= 1 - env_outputs["done"].int()
             timesteps[i] += 1
@@ -360,27 +370,6 @@ def results_to_dict(results):
     }
 
 
-def log(results):
-    returns = results["returns"]
-    steps = results["steps"]
-    scores = results["scores"]
-    times = results["times"]
-
-    fig, (ax1, ax2) = plt.subplots(ncols=2, nrows=1)
-    ax1.scatter(steps, returns)
-    ax2.scatter(times, scores)
-    wandb.log({"scatter_plot": wandb.Image(fig)})
-
-    df = pd.DataFrame(
-        {"returns": returns, "steps": steps, "scores": scores, "times": times}
-    )
-    df.to_csv("rollout_stats.csv", index=None)
-
-    table = wandb.Table(dataframe=df)
-    wandb.log({"frame": table})
-    wandb.log(results_to_dict(results))
-
-
 def parse_args(args=None):
     parser = argparse.ArgumentParser()
     parser.add_argument("--name", type=str, default="evaluation")
@@ -415,11 +404,7 @@ def main(variant):
 
     print(f"Evaluating checkpoint {checkpoint_dir}")
 
-    results, flags, step = evaluate_folder(
-        pbar_idx=0, 
-        path=checkpoint_dir, 
-        **kwargs
-    )
+    results, flags, step = evaluate_folder(pbar_idx=0, path=checkpoint_dir, **kwargs)
 
     config = omegaconf.OmegaConf.to_container(flags)
     config.update(variant)
@@ -432,7 +417,7 @@ def main(variant):
             entity="gmum",
             name=name,
         )
-        log(results, step)
+        wandb.log(results, step=step)
 
     with open(variant["results_path"], "w") as file:
         json.dump(results_to_dict(results), file)
@@ -440,7 +425,7 @@ def main(variant):
 
 if __name__ == "__main__":
     tempdir = tempfile.mkdtemp()
-    tempfile.tempdir = tempdir 
+    tempfile.tempdir = tempdir
 
     try:
         args = vars(parse_args())
