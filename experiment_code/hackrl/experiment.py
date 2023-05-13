@@ -31,7 +31,6 @@ import hackrl.models
 
 from hackrl.utils.dataset_scores import get_dataset_scores
 from hackrl.utils.utils import set_seed
-from hackrl.eval import evaluate_model
 
 import render_utils
 from hackrl.core import nest
@@ -945,12 +944,6 @@ def main(cfg):
         batch_size=FLAGS.actor_batch_size,
         num_batches=FLAGS.num_actor_batches,
     )
-    eval_envs = moolib.EnvPool(
-        lambda: hackrl.environment.create_env(FLAGS),
-        num_processes=FLAGS.num_actor_cpus,
-        batch_size=FLAGS.eval_batch_size,
-        num_batches=FLAGS.num_actor_batches,
-    )
 
     # don't use checkpoint actor if we will be loading model from checkpoint
     if os.path.exists(os.path.join(FLAGS.savedir, "checkpoint.tar")):
@@ -994,7 +987,6 @@ def main(cfg):
         wandb.define_metric("global/env_train_steps")
         wandb.define_metric("global/*", step_metric="global/env_train_steps")
         wandb.define_metric("local/*", step_metric="global/env_train_steps")
-        wandb.define_metric("eval/*", step_metric="global/env_train_steps")
 
     env_states = [EnvBatchState(FLAGS, model) for _ in range(FLAGS.num_actor_batches)]
 
@@ -1151,8 +1143,6 @@ def main(cfg):
     is_connected = False
     unfreezed = False
     checkpoint_steps = -1
-    eval_steps = 0 if FLAGS.skip_first_eval else -1
-    eval_action = None
     while not terminate:
         prev_now = now
         now = time.time()
@@ -1263,28 +1253,6 @@ def main(cfg):
         else:
             if accumulator.wants_gradients():
                 accumulator.skip_gradients()
-
-            if (steps // FLAGS.eval_checkpoint_every > eval_steps) and is_leader:
-                eval_kwargs = {
-                    "rollouts": FLAGS.eval_rollouts,
-                    "batch_size": FLAGS.eval_batch_size,
-                    "device": FLAGS.device,
-                    "score_target": score_target,
-                    "num_actor_batches": FLAGS.num_actor_batches,
-                    "log_to_wandb": FLAGS.wandb,
-                }
-                
-                eval_results, eval_action = evaluate_model(eval_envs, model, action=eval_action, **eval_kwargs)
-                eval_results["global/env_train_steps"] = stats["env_train_steps"].result()
-
-                if FLAGS.wandb:
-                    # wandb.log(eval_results, step=steps)
-                    wandb.log(eval_results)
-
-                eval_steps = steps // FLAGS.eval_checkpoint_every
-                # this is for smooth logging
-                now = time.time()
-                last_log = now
 
             # Generate data.
             cur_index = next_env_index
