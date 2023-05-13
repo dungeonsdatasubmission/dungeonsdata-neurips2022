@@ -168,4 +168,4 @@ unfreeze_actor_steps: 0
 eval_checkpoint_every: 50_000_000
 eval_rollouts: 1024
 eval_batch_size: 256
-eval_wandb: False
+skip_first_eval: False

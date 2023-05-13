@@ -1144,7 +1144,7 @@ def main(cfg):
     is_connected = False
     unfreezed = False
     checkpoint_steps = -1
-    eval_steps = -1
+    eval_steps = 0 if FLAGS.skip_first_eval else -1
     eval_action = None
     while not terminate:
         prev_now = now
