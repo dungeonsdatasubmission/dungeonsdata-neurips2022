@@ -727,12 +727,14 @@ def compute_gradients(data, learner_state, stats):
     #     rewards /= model.get_running_std()
 
     discounts = (~env_outputs["done"]).float() * FLAGS.discounting
+    lambdas = (~env_outputs["done"]).float() * FLAGS.lambda_gae
 
     vtrace_returns = vtrace.from_logits(
         behavior_policy_logits=actor_outputs["policy_logits"],
         target_policy_logits=learner_outputs["policy_logits"],
         actions=actor_outputs["action"],
         discounts=discounts,
+        lambdas=lambdas,
         rewards=rewards,
         values=learner_outputs["baseline"],
         bootstrap_value=bootstrap_value,

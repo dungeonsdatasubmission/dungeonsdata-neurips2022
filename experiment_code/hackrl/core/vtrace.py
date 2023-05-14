@@ -59,6 +59,7 @@ def from_logits(
     target_policy_logits,
     actions,
     discounts,
+    lambdas,
     rewards,
     values,
     bootstrap_value,
@@ -73,6 +74,7 @@ def from_logits(
     vtrace_returns = from_importance_weights(
         log_rhos=log_rhos,
         discounts=discounts,
+        lambdas=lambdas,
         rewards=rewards,
         values=values,
         bootstrap_value=bootstrap_value,
@@ -91,6 +93,7 @@ def from_logits(
 def from_importance_weights(
     log_rhos,
     discounts,
+    lambdas,
     rewards,
     values,
     bootstrap_value,
@@ -115,7 +118,7 @@ def from_importance_weights(
         acc = torch.zeros_like(bootstrap_value)
         result = []
         for t in range(discounts.shape[0] - 1, -1, -1):
-            acc = deltas[t] + discounts[t] * cs[t] * acc
+            acc = deltas[t] + discounts[t] * lambdas[t] * cs[t] * acc
             result.append(acc)
         result.reverse()
         vs_minus_v_xs = torch.stack(result)

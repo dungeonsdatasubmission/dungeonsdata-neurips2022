@@ -44,6 +44,7 @@ connect: 0.0.0.0:4431
 crop_dim: 18
 device: "cuda:0"
 discounting: 0.999
+lambda_gae: 1.0 # 1.0 the same as without gae, set between 0 < lambda < 1, comprimise between bias and variance
 entity: gmum
 entropy_cost: 0.001
 env:
