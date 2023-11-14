@@ -159,6 +159,6 @@ If you are having issues loading the dataset, ensure that the directory structur
 help(nld.add_nledata_directory) # will print docstring 
 ```
 
-Or if you need to get in touch email dungeons.data.submission@gmail.com
+Or if you need to get in touch please send an email to eric *DOT* hambro _AT_ gmail *DOT* com
 
 
