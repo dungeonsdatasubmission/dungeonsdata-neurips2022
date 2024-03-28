@@ -1,0 +1,12 @@
+{
+    "exp_kind": "eval_stitch",
+    "filters": {
+        "$or": [
+            {"config.exp_kind": ["2023_05_06_eval_array_monk_appo_bc_T"]},
+            {
+                "config.exp_kind": ["2023_05_09_eval_array_50M"],
+                "config.exp_tags": ["monk-APPO-AA-BC-T"]
+            }
+        ]
+    }
+}

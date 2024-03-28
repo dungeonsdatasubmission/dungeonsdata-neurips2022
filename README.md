@@ -7,6 +7,39 @@ Dataset Instructions and Tutorials for Submission to NeurIPS2022 Datasets and Be
 This data is licensed under the NetHack General Public License - based on the GPL-style BISON license. It is the license used for the game of NetHack, and can be found [here](https://github.com/facebookresearch/nle/blob/main/LICENSE).
 
 
+## Installation
+
+Inspired with nle installation. Other dependencies can be installed by doing:
+
+```bash
+apt-get -y install git build-essential ffmpeg python3-pip \ python3-dev  python3-numpy curl libgl1-mesa-dev libgl1-mesa-glx autoconf libtool pkg-config libglew-dev libosmesa6-dev libbz2-dev libclang-dev software-properties-common net-tools unzip vim wget xpra xserver-xorg-dev virtualenv tmux make gcc g++
+```
+
+We advise using a conda environment or a singularity image. Singularity definition can be found in `experiment_code/assets`. Setting up with conda can be done by.
+
+```bash
+cd experiment_code
+
+conda create -y -n dungeons python=3.9
+conda activate dungeons
+
+conda install pytorch torchvision torchaudio pytorch-cuda=11.8 -c pytorch -c nvidia
+conda install cmake flex bison
+conda install pybind11 -c conda-forge
+conda install cudnn
+
+pip install tqdm debugpy
+pip install git+https://github.com/facebookresearch/moolib
+pip install git+https://github.com/facebookresearch/nle
+pip install -r requirements.txt 
+
+pybind11_INCLUDE_DIR=$(dirname $(dirname $(which conda)))/envs/dungeons/share/cmake/pybind11
+
+cd render_utils && pip install -e . && cd ..
+
+pip install -e .
+```
+
 ## Accessing the Dataset
 
 The dataset is currently hosted on FAIRs public s3 bucket. You can access it it via a browser or curls below.
@@ -149,7 +182,60 @@ for more instructions on usage see the accompanying tutorial notebook in this re
 
 ## Replicating Experiments
 
-Code with a `README.md` on how to replicate experiments is available in the `experiment_code` directory.  This code was developed for use on an internal cluster, and will be tidied up and open sourced in NLE upon full release of the dataset.
+Arguments used for replicating different experiments (from authors) can be found in `experiment_code/runs.sh`. To examine if setup is done correctly and everything works I recommend running APPO from scratch with Human Monk.
+
+```bash
+python scripts/sbatch_experiment.py --broker $BROKER_IP:$BROKER_PORT --time=4320 --constraint=volta32gb --cpus=20 exp_set=2G num_actor_cpus=20 exp_point=monk-APPO  total_steps=2_000_000_000 character='mon-hum-neu-mal'
+```
+
+### Running experiment with conda (or inside singularity shell)
+
+If you want to run this experiment locally (conda) you can run `experiment_code/train.sh` or simply:
+
+```bash
+export BROKER_IP=0.0.0.0
+export BROKER_PORT=4431
+
+python -m moolib.broker &
+
+python -m hackrl.experiment connect=$BROKER_IP:$BROKER_PORT exp_set=2G num_actor_cpus=20 exp_point=monk-APPO  total_steps=2_000_000_000 character='mon-hum-neu-mal' group='monk-APPO'
+```
+
+### Running debugging session
+
+If you want to start a debugging session (vscode) I recommend doing it with debugpy.
+
+```bash
+export BROKER_IP=0.0.0.0
+export BROKER_PORT=4431
+
+python -m moolib.broker &
+
+python -m debugpy --wait-for-client --listen 5678 ./hackrl/experiment.py connect=$BROKER_IP:$BROKER_PORT exp_set=2G num_actor_cpus=20 exp_point=monk-APPO  total_steps=2_000_000_000 character='mon-hum-neu-mal' group='monk-APPO'
+```
+
+And to connect your client you need to add to launch.json 
+```bash
+    {
+        "name": "Python: Attach",
+        "type": "python",
+        "request": "attach",
+        "connect": {
+            "host": "localhost",
+            "port": 5678
+        },
+        "justMyCode": false,
+    }
+```
+
+### Using sbatch command
+
+I recommend using pure sbatch and singularity image for running experiments. 
+Example:
+
+```bash
+sbatch run_ares.sh
+```
 
 ## Troubleshooting
 

@@ -1,0 +1,98 @@
+Bootstrap: docker
+# From: nvidia/cuda:11.8.0-cudnn8-devel-ubuntu20.04
+From: nvidia/cuda:11.8.0-cudnn8-devel-ubuntu22.04
+
+%environment
+    export DEBIAN_FRONTEND=noninteractive
+
+
+%setup
+    mkdir -p ${SINGULARITY_ROOTFS}/dungeons
+    # cp -r . ${SINGULARITY_ROOTFS}/dungeons
+    # when using --sandbox mode there is a problem with copying the entire directory 
+    # When Singularity tries to copy the directory into the sandbox, 
+    # it is actually copying the sandbox into itself, which is not allowed.
+    rsync -av --exclude=".singularity" . ${SINGULARITY_ROOTFS}/dungeons
+
+
+%post
+    export DEBIAN_FRONTEND=noninteractive
+
+    apt-get update && apt-get install -yq \
+        build-essential \
+        cmake \
+        curl \
+        git \
+        ninja-build \
+        wget \
+        make
+
+    # nle dependencies
+    apt-get install -yq autoconf libtool pkg-config libbz2-dev
+
+    mkdir conda_setup
+    cd conda_setup
+    curl -o miniconda.sh https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh && \
+        chmod +x miniconda.sh && \
+        ./miniconda.sh -b -p /opt/conda && \
+        /opt/conda/bin/conda install -y python=3.9 && \
+        /opt/conda/bin/conda clean -ya
+
+%environment
+    export PATH="/opt/conda/bin:$PATH"
+
+%post 
+    export PATH="/opt/conda/bin:$PATH"
+
+    python -m pip install --upgrade pip
+
+    conda update -n base -c defaults conda
+    conda install -yq cmake flex bison lit
+    conda install -yq pybind11 -c conda-forge
+    conda install -yq pytorch torchvision torchaudio pytorch-cuda=11.8 -c pytorch -c nvidia
+
+    pip install -q tqdm debugpy
+    pip install -q nle
+    pip install -q matplotlib==3.5.3
+    pip install -q git+https://gitlab.com/awarelab/mrunner.git
+    pip install -q neptune-client==0.16.17
+
+    # install moolib
+    cd /opt/
+    git clone --recursive https://github.com/facebookresearch/moolib.git
+    cd /opt/moolib
+    pip install -r examples/requirements.txt
+    pip install .
+    python -c "import moolib"
+
+    # install dungeons
+    cd /dungeons/
+    pip install -r requirements.txt 
+    pybind11_INCLUDE_DIR=/opt/conda/share/cmake/pybind11
+    cd render_utils && pip install -e . && cd ..
+    pip install -e .
+
+    # install my version of nle
+    cd /opt/
+    git clone --recursive https://github.com/BartekCupial/nle.git
+    cd /opt/nle
+    pip install -e .["dev"]
+
+    pip install -q transformers~=4.5.1
+    pip install -q packaging~=21.3
+
+    # Test transformers, NLE and moolib.
+    python -c 'import transformers'
+    python -c 'import gym; import nle; env = gym.make("NetHackScore-v0"); env.reset()'
+    python -c 'import moolib'
+
+    chmod a+rw -R /opt/conda/bin/python
+
+    apt-get clean
+    rm -rf /var/lib/apt/lists/*
+
+    conda clean --all
+    conda info
+
+%runscript
+    exec "$@"

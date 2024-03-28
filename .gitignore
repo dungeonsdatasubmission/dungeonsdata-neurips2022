@@ -1,0 +1,5 @@
+checkpoint
+.vscode
+latest
+logs.tsv
+wandb

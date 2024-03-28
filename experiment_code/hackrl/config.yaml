@@ -19,7 +19,10 @@ hydra:
         format: ${log_fmt}
   run:
     dir: "${localdir}"
+  job:
+    chdir: False
 
+seed: 0
 activation_function: relu
 actor_batch_size: 512
 add_image_observation: True
@@ -27,6 +30,8 @@ adam_beta1: 0.9
 adam_beta2: 0.999
 adam_eps: 0.0000001
 adam_learning_rate: 0.0001
+weight_decay: 0.0001
+warmup_steps: 1 # for lambdaLR scheduler
 appo_clip_policy: 0.1  # 'null' to disable clipping
 appo_clip_baseline: 1.0  # 'null' to disable clipping
 baseline_cost: 1
@@ -34,17 +39,20 @@ batch_size: 256
 character: "@"
 checkpoint_interval: 600
 checkpoint_history_interval: 3600
-connect: 127.0.0.1:4431
+checkpoint_save_every: 10_000_000
+connect: 0.0.0.0:4431
 crop_dim: 18
 device: "cuda:0"
 discounting: 0.999
-entity: null
+lambda_gae: 1.0 # 1.0 the same as without gae, set between 0 < lambda < 1, comprimise between bias and variance
+entity: gmum
 entropy_cost: 0.001
 env:
   name: challenge  # One of challenge, staircase, pet, eat, gold, score, scout, oracle.
   max_episode_steps: 100000
 exp_point: point-A       # spare parameter, useful for wandb grouping
 exp_set: experiment-set  # spare parameter, useful for wandb grouping
+exp_tags: local          # spare parameter, useful for wandb grouping
 fixup_init: true
 fn_penalty_step: constant
 grad_norm_clipping: 4
@@ -59,6 +67,12 @@ local_name: "${uid:}"
 log_fmt: "[%(levelname)s:${local_name} %(process)d %(module)s:%(lineno)d %(asctime)s] %(message)s"
 log_interval: 20
 model: ChaoticDwarvenGPT5
+# model: DecisionTransformer
+dropout: 0.1
+n_layer: 3
+n_head: 1
+hidden_dim: 512
+
 normalize_advantages: True
 normalize_reward: False
 num_actor_batches: 2
@@ -66,13 +80,14 @@ num_actor_cpus: 10
 pixel_size: 6
 penalty_step: 0.0
 penalty_time: 0.0
-project: project
+project: nle
 rms_alpha: 0.99
 rms_epsilon: 0.000001
 rms_momentum: 0
 reward_clip: 10
 reward_scale: 1
-savedir: "/checkpoint/${env:USER}/hackrl/${project}/${group}"
+savedir: "checkpoint/hackrl/${project}/${group}"
+dbfilename: "/ttyrecs/ttyrecs.db"
 state_counter: none
 total_steps: 10_000_000_000
 unroll_length: 32
@@ -98,24 +113,43 @@ baseline:
 
 run_teacher_hs: False
 use_kickstarting: False
+use_kickstarting_bc: False
 kickstarting_loss: 1.0
-kickstarting_path: /checkpoint/ehambro/20220519/carmine-woodpecker/checkpoint_v102229.tar
+kickstarting_decay: 1.0
+kickstarting_loss_bc: 1.0
+kickstarting_decay_bc: 1.0
+kickstarting_path: /net/pr2/projects/plgrid/plgggmum_crl/bcupial/monk-AA-BC/checkpoint.tar
+log_forgetting: False
+forgetting_dataset: bc1
 
 use_tty_only: true  # Use only tty observations. 'False' ~ 10% faster & higher score
 use_prev_action: true
 use_inverse_model: false
 use_inverse_model_only: false
+use_actions: false
+use_returns: true
+action_hidden_dim: 128
+return_hidden_dim: 128
+use_timesteps: true
+return_to_go: true
+linear_time_embeddings: true
+score_scale: 40000
+score_target_strategy: value # 'max', 'mean', 'percentile', 'value'
+score_target_percentile: 95
+score_target_value: 40000
 inverse_loss: 1
 augment_inverse_random: False
 random_inverse_loss: 2
 use_difference_vector: False
 use_resnet: False
 supervised_loss: 0
+supervised_decay: 1.0
 
 dataset: autoascend
 dataset_demigod: False
 dataset_highscore: False
 dataset_midscore: False
+dataset_deep: False
 dataset_warmup: 0
 dataset_reset: 0
 dataset_bootstrap_actions: False
@@ -127,3 +161,12 @@ ttyrec_batch_size: 512
 ttyrec_unroll_length: 32
 ttyrec_envpool_size: 4
 ttyrec_cpus: 10 
+
+use_checkpoint_actor: False
+model_checkpoint_path: /checkpoint/checkpoint.tar
+unfreeze_actor_steps: 0
+
+eval_checkpoint_every: 50_000_000
+eval_rollouts: 1024
+eval_batch_size: 256
+skip_first_eval: False

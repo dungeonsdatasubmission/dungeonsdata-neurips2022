@@ -9,6 +9,8 @@ import pprint
 import signal
 import socket
 import time
+import tempfile
+import shutil
 from typing import Optional
 
 import coolname
@@ -26,6 +28,10 @@ from nle.dataset import populate_db
 
 import hackrl.environment
 import hackrl.models
+
+from hackrl.utils.dataset_scores import get_dataset_scores
+from hackrl.utils.utils import set_seed
+
 import render_utils
 from hackrl.core import nest
 from hackrl.core import record
@@ -38,12 +44,13 @@ TTYREC_ENVPOOL = None
 
 
 class TtyrecEnvPool:
-    def __init__(self, flags, **dataset_kwargs):
+    def __init__(self, flags, dataset_name, dataset_scores, **dataset_kwargs):
         self.idx = 0
         self.env_pool_size = flags.ttyrec_envpool_size
-        self.dataset = dataset.TtyrecDataset(flags.dataset, **dataset_kwargs)
+        self.dataset = dataset.TtyrecDataset(dataset_name, **dataset_kwargs)
         self.dataset.shuffle = True
         self.threadpool = dataset_kwargs["threadpool"]
+        self.dataset_scores = dataset_scores
 
         env = hackrl.environment.create_env(flags)
         obs = env.reset()
@@ -97,6 +104,13 @@ class TtyrecEnvPool:
                 "prev_action": torch.zeros(self.prev_action_shape, dtype=torch.uint8),
             }
 
+            # gameids = np.array(list(map(int, self.dataset_scores.keys()))).max()
+            # max_scores = np.zeros(gameids + 1)
+
+            # for key, value in self.dataset_scores.items():
+            #     max_scores[int(key)] = value
+            # max_scores = torch.from_numpy(max_scores).to(torch.float32)
+
             prev_action = torch.zeros(
                 (self.ttyrec_batch_size, 1), dtype=torch.uint8
             ).to(self.device)
@@ -130,14 +144,17 @@ class TtyrecEnvPool:
                         "tty_cursor": torch.from_numpy(cursor_uint8),
                         "screen_image": mb_tensors["screen_image"],
                         "done": mb_tensors["done"].bool(),
+                        "timesteps": mb_tensors["timestamps"].float(),
+                        # "max_scores": max_scores[mb["gameids"].flatten()].reshape(mb["gameids"].shape).float(),
+                        "mask": torch.ones_like(mb_tensors["timestamps"]).bool()
                     }
 
-                    if "actions" in mb_tensors:
-                        actions = mb_tensors["actions"].long().to(self.device)
+                    if "keypresses" in mb_tensors:
+                        actions = mb_tensors["keypresses"].long().to(self.device)
                         actions_converted = (
                             self.embed_actions(actions).squeeze(-1).long()
                         )
-                        final_mb["score"] = mb_tensors["scores"]
+                        final_mb["scores"] = mb_tensors["scores"].float()
                         final_mb["actions_converted"] = actions_converted
                         final_mb["prev_action"] = torch.cat(
                             [prev_action, actions_converted[:, :-1]], dim=1
@@ -208,15 +225,17 @@ class TtyrecEnvPool:
             return iter(_iter())
 
 
-def make_ttyrec_envpool(threadpool, flags):
-    dbfilename = "/private/home/ehambro/fair/workspaces/clean_rl/ttyrecs.db"
+def make_ttyrec_envpool(threadpool, dataset_name, flags):
+    dbfilename = flags.dbfilename 
 
     if not os.path.isfile(dbfilename):
-        alt_path = "/scratch/ehambro/altorg/altorg/111720"
-        aa_path = "/private/home/ehambro/fair/workspaces/autoascend-submission/nle_data"
+        alt_path = "/nle/nld-nao"
+        aa_path = "/nle/nld-aa/nle_data"
         db.create(dbfilename)
         populate_db.add_nledata_directory(aa_path, "autoascend", dbfilename)
         populate_db.add_altorg_directory(alt_path, "altorg", dbfilename)
+
+    dataset_scores = get_dataset_scores(flags.dataset, dbfilename)
 
     kwargs = dict(
         batch_size=flags.ttyrec_batch_size,
@@ -225,6 +244,7 @@ def make_ttyrec_envpool(threadpool, flags):
         threadpool=threadpool,
         loop_forever=True,
         shuffle=True,
+        dataset_scores=dataset_scores,
     )
     subselect = []
     if flags.character == "mon-hum-neu-mal":
@@ -235,13 +255,15 @@ def make_ttyrec_envpool(threadpool, flags):
         subselect.append(" points>10000")
     if flags.dataset_midscore:
         subselect.append(" points>1000 AND points<10000")
+    if flags.dataset_deep:
+        subselect.append(" maxlvl>1")
 
     if subselect:
         kwargs["subselect_sql"] = "SELECT gameid FROM games WHERE " + "AND".join(
             subselect
         )
 
-    return TtyrecEnvPool(flags, **kwargs)
+    return TtyrecEnvPool(flags, dataset_name, **kwargs)
 
 
 @dataclasses.dataclass
@@ -348,6 +370,7 @@ class StatSum:
 class LearnerState:
     model: torch.nn.Module
     optimizer: torch.optim.Optimizer
+    scheduler: torch.optim.lr_scheduler.LRScheduler
     model_version: int = 0
     num_previous_leaders: int = 0
     train_time: float = 0
@@ -359,15 +382,17 @@ class LearnerState:
         r = dataclasses.asdict(self)
         r["model"] = self.model.state_dict()
         r["optimizer"] = self.optimizer.state_dict()
+        r["scheduler"] = self.scheduler.state_dict()
         return r
 
     def load(self, state):
         for k, v in state.items():
-            if k not in ("model", "optimizer", "global_stats"):
+            if k not in ("model", "optimizer", "scheduler", "global_stats"):
                 setattr(self, k, v)
         self.model.version = state["model_version"]
         self.model.load_state_dict(state["model"])
         self.optimizer.load_state_dict(state["optimizer"])
+        self.scheduler.load_state_dict(state["scheduler"])
 
         for k, v in state["global_stats"].items():
             if k in self.global_stats:
@@ -429,7 +454,7 @@ class GlobalStatsAccumulator:
             self.queued_global_stats = None
             # Additional copy to deal with potential partial reductions.
             self.reduce_future = self.rpc_group.all_reduce(
-                "global stats", copy.deepcopy(self.sent_global_stats), self.add_stats
+                "global stats", copy.deepcopy(self.sent_global_stats), op=self.add_stats
             )
 
     def reset(self):
@@ -442,15 +467,17 @@ class EnvBatchState:
     def __init__(self, flags, model):
         batch_size = flags.actor_batch_size
         device = flags.device
+        self.device = device
         self.batch_size = batch_size
         self.prev_action = torch.zeros(batch_size).long().to(device)
+        self.timesteps = torch.zeros(batch_size).to(device)
         self.future = None
         self.core_state = model.initial_state(batch_size=batch_size)
         self.core_state = nest.map(lambda x: x.to(device), self.core_state)
         self.initial_core_state = self.core_state
         self.discount = flags.discounting
 
-        self.running_reward = torch.zeros(batch_size)
+        self.running_reward = torch.zeros(batch_size).to(device)
         self.discounted_running_reward = torch.zeros(batch_size)
         self.step_count = torch.zeros(batch_size)
 
@@ -458,14 +485,15 @@ class EnvBatchState:
 
     def update(self, env_outputs, action, stats):
         self.prev_action = action
-        self.running_reward += env_outputs["reward"]
+        self.running_reward += env_outputs["reward"].to(self.device)
         self.discounted_running_reward *= self.discount
         self.discounted_running_reward += env_outputs["reward"]
         self.step_count += 1
+        self.timesteps += 1
 
         done = env_outputs["done"]
 
-        episode_return = self.running_reward * done
+        episode_return = self.running_reward.cpu() * done
         episode_step = self.step_count * done
         episodes_done = done.sum().item()
 
@@ -475,7 +503,7 @@ class EnvBatchState:
         stats["steps_done"] += done.numel()
         stats["episodes_done"] += episodes_done
 
-        stats["running_reward"] += self.running_reward.mean().item()
+        stats["running_reward"] += self.running_reward.cpu().mean().item()
         stats["running_step"] += self.step_count.mean().item()
 
         stats["mean_square_discounted_running_reward"] += (
@@ -484,8 +512,9 @@ class EnvBatchState:
         not_done = ~done
 
         self.discounted_running_reward *= not_done
-        self.running_reward *= not_done
+        self.running_reward *= not_done.to(self.device)
         self.step_count *= not_done
+        self.timesteps *= not_done.to(self.device)
 
 
 def compute_baseline_loss(
@@ -530,8 +559,8 @@ def compute_entropy_loss(logits, stats=None):
 def compute_kickstarting_loss(student_logits, expert_logits):
     T, B, *_ = student_logits.shape
     return torch.nn.functional.kl_div(
-        F.log_softmax(student_logits.view(T * B, -1), dim=-1),
-        F.log_softmax(expert_logits.view(T * B, -1), dim=-1),
+        F.log_softmax(student_logits.reshape(T * B, -1), dim=-1),
+        F.log_softmax(expert_logits.reshape(T * B, -1), dim=-1),
         log_target=True,
         reduction="batchmean",
     )
@@ -589,16 +618,21 @@ def compute_inverse_loss(predicted_action_logits, actions):
 
 
 def create_optimizer(model):
-    return torch.optim.Adam(
+    return torch.optim.AdamW(
         model.parameters(),
         lr=FLAGS.adam_learning_rate,
         betas=(FLAGS.adam_beta1, FLAGS.adam_beta2),
         eps=FLAGS.adam_eps,
+        weight_decay=FLAGS.weight_decay,
     )
 
 
+def create_scheduler(optimizer):
+    return torch.optim.lr_scheduler.LambdaLR(optimizer, lambda steps: min((steps + 1) / FLAGS.warmup_steps, 1))
+
+
 def compute_gradients(data, learner_state, stats):
-    global TTYREC_ENVPOOL, TTYREC_HIDDEN_STATE
+    global TTYREC_ENVPOOL, TTYREC_HIDDEN_STATE, FORGETTING_ENVPOOL, FORGETTING_HIDDEN_STATE
     model = learner_state.model
 
     env_outputs = data["env_outputs"]
@@ -630,7 +664,9 @@ def compute_gradients(data, learner_state, stats):
             supervised_loss = (
                 FLAGS.supervised_loss * F.cross_entropy(logits[:-1], true_a[:-1]).mean()
             )
+        FLAGS.supervised_loss *= FLAGS.supervised_decay
         stats["supervised_loss"] += supervised_loss.item()
+        stats["supervised_coeff"] += FLAGS.supervised_loss
 
         total_loss += supervised_loss
         if FLAGS.use_inverse_model:
@@ -691,12 +727,14 @@ def compute_gradients(data, learner_state, stats):
     #     rewards /= model.get_running_std()
 
     discounts = (~env_outputs["done"]).float() * FLAGS.discounting
+    lambdas = (~env_outputs["done"]).float() * FLAGS.lambda_gae
 
     vtrace_returns = vtrace.from_logits(
         behavior_policy_logits=actor_outputs["policy_logits"],
         target_policy_logits=learner_outputs["policy_logits"],
         actions=actor_outputs["action"],
         discounts=discounts,
+        lambdas=lambdas,
         rewards=rewards,
         values=learner_outputs["baseline"],
         bootstrap_value=bootstrap_value,
@@ -743,8 +781,54 @@ def compute_gradients(data, learner_state, stats):
             learner_outputs["policy_logits"],
             actor_outputs["kick_policy_logits"],
         )
+        FLAGS.kickstarting_loss *= FLAGS.kickstarting_decay
         total_loss += kickstarting_loss
         stats["kickstarting_loss"] += kickstarting_loss.item()
+        stats["kickstarting_coeff"] += FLAGS.kickstarting_loss
+
+    if FLAGS.use_kickstarting_bc:
+        assert not (FLAGS.supervised_loss or FLAGS.behavioural_clone)
+
+        ttyrec_data = TTYREC_ENVPOOL.result()
+        idx = TTYREC_ENVPOOL.idx
+        ttyrec_predictions, TTYREC_HIDDEN_STATE[idx] = model(
+            ttyrec_data, TTYREC_HIDDEN_STATE[idx]
+        )
+        TTYREC_HIDDEN_STATE[idx] = nest.map(
+            lambda t: t.detach(), TTYREC_HIDDEN_STATE[idx]
+        )
+
+        kickstarting_loss_bc = FLAGS.kickstarting_loss_bc * compute_kickstarting_loss(
+            ttyrec_predictions["policy_logits"],
+            ttyrec_predictions["kick_policy_logits"],
+        )
+        FLAGS.kickstarting_loss_bc *= FLAGS.kickstarting_decay_bc
+        total_loss += kickstarting_loss_bc
+        stats["kickstarting_loss_bc"] += kickstarting_loss_bc.item()
+        stats["kickstarting_coeff_bc"] += FLAGS.kickstarting_loss_bc
+
+        # Only call step when you are done with ttyrec_data - it may get overwritten
+        TTYREC_ENVPOOL.step()
+
+    if FLAGS.log_forgetting:
+        with torch.no_grad():
+            kick_data = FORGETTING_ENVPOOL.result()
+            idx = FORGETTING_ENVPOOL.idx
+            kick_predictions, FORGETTING_HIDDEN_STATE[idx] = model(
+                kick_data, FORGETTING_HIDDEN_STATE[idx]
+            )
+            FORGETTING_HIDDEN_STATE[idx] = nest.map(
+                lambda t: t.detach(), FORGETTING_HIDDEN_STATE[idx]
+            )
+
+            forgetting_loss = compute_kickstarting_loss(
+                kick_predictions["policy_logits"],
+                kick_predictions["kick_policy_logits"],
+            )
+            stats["forgetting_loss"] += forgetting_loss.item()
+            
+            # Only call step when you are done with ttyrec_data - it may get overwritten
+            FORGETTING_ENVPOOL.step()
 
     total_loss.backward()
 
@@ -761,18 +845,21 @@ def compute_gradients(data, learner_state, stats):
 
 def step_optimizer(learner_state, stats):
     optimizer = learner_state.optimizer
+    scheduler = learner_state.scheduler
     model = learner_state.model
 
     unclipped_grad_norm = nn.utils.clip_grad_norm_(
         model.parameters(), FLAGS.grad_norm_clipping
     )
     optimizer.step()
+    scheduler.step()
 
     learner_state.model_version += 1
     learner_state.model.version += 1
 
     stats["unclipped_grad_norm"] += unclipped_grad_norm.item()
     stats["optimizer_steps"] += 1
+    stats["lr"] += scheduler._last_lr[0]
 
 
 def log(stats, step, is_global=False):
@@ -787,7 +874,8 @@ def log(stats, step, is_global=False):
         record.log_to_file(**stats_values)
 
     if FLAGS.wandb:
-        wandb.log(stats_values, step=step)
+        # wandb.log(stats_values, step=step)
+        wandb.log(stats_values)
 
 
 def save_checkpoint(checkpoint_path, learner_state):
@@ -830,6 +918,8 @@ def main(cfg):
     global FLAGS
     FLAGS = cfg
 
+    set_seed(seed=FLAGS.seed)
+
     if not os.path.isabs(FLAGS.savedir):
         FLAGS.savedir = os.path.join(hydra.utils.get_original_cwd(), FLAGS.savedir)
 
@@ -857,10 +947,16 @@ def main(cfg):
         num_batches=FLAGS.num_actor_batches,
     )
 
-    if FLAGS.use_kickstarting:
+    # don't use checkpoint actor if we will be loading model from checkpoint
+    if os.path.exists(os.path.join(FLAGS.savedir, "checkpoint.tar")):
+        FLAGS.use_checkpoint_actor = False
+
+    if FLAGS.use_kickstarting or FLAGS.use_kickstarting_bc or FLAGS.log_forgetting:
         student = hackrl.models.create_model(FLAGS, FLAGS.device)
         load_data = torch.load(FLAGS.kickstarting_path)
         t_flags = omegaconf.OmegaConf.create(load_data["flags"])
+        # don't use checkpoint actor if we will be loading model from kickstarting_path
+        t_flags.use_checkpoint_actor = False
         teacher = hackrl.models.create_model(t_flags, FLAGS.device)
         teacher.load_state_dict(load_data["learner_state"]["model"])
         model = hackrl.models.KickStarter(
@@ -869,7 +965,8 @@ def main(cfg):
     else:
         model = hackrl.models.create_model(FLAGS, FLAGS.device)
     optimizer = create_optimizer(model)
-    learner_state = LearnerState(model, optimizer)
+    scheduler = create_scheduler(optimizer)
+    learner_state = LearnerState(model, optimizer, scheduler)
 
     model_numel = sum(p.numel() for p in model.parameters() if p.requires_grad)
     logging.info("Number of model parameters: %i", model_numel)
@@ -888,6 +985,10 @@ def main(cfg):
             entity=FLAGS.entity,
             name=FLAGS.local_name,
         )
+
+        wandb.define_metric("global/env_train_steps")
+        wandb.define_metric("global/*", step_metric="global/env_train_steps")
+        wandb.define_metric("local/*", step_metric="global/env_train_steps")
 
     env_states = [EnvBatchState(FLAGS, model) for _ in range(FLAGS.num_actor_batches)]
 
@@ -936,6 +1037,10 @@ def main(cfg):
         "clipped_baseline_fraction": StatMean(),
         "clipped_policy_fraction": StatMean(),
         "kickstarting_loss": StatMean(),
+        "kickstarting_coeff": StatMean(),
+        "kickstarting_loss_bc": StatMean(),
+        "kickstarting_coeff_bc": StatMean(),
+        "forgetting_loss": StatMean(),
         "inverse_loss": StatMean(),
         "inverse_prediction_accuracy": StatMean(),
         "random_inverse_loss": StatMean(),
@@ -945,6 +1050,8 @@ def main(cfg):
         "running_advantages": StatMean(cumulative=True),
         "sample_advantages": StatMean(),
         "supervised_loss": StatMean(),
+        "supervised_coeff": StatMean(),
+        "lr": StatMean(),
     }
     learner_state.global_stats = copy.deepcopy(stats)
 
@@ -969,6 +1076,9 @@ def main(cfg):
             "Got signal %s, quitting!",
             signal.strsignal(signum) if hasattr(signal, "strsignal") else signum,
         )
+        logging.info(f"Removing all temporary files in {tempfile.tempdir}")
+        shutil.rmtree(tempfile.tempdir)
+
         terminate = True
         previous_handler = previous_signal_handler[signum]
         if previous_handler is not None:
@@ -986,7 +1096,7 @@ def main(cfg):
         logging.info("Optimising CuDNN kernels")
         torch.backends.cudnn.benchmark = True
 
-    if FLAGS.supervised_loss or FLAGS.behavioural_clone:
+    if FLAGS.supervised_loss or FLAGS.behavioural_clone or FLAGS.use_kickstarting_bc:
         global TTYREC_ENVPOOL, TTYREC_HIDDEN_STATE
         tp = concurrent.futures.ThreadPoolExecutor(max_workers=FLAGS.ttyrec_cpus)
         TTYREC_HIDDEN_STATE = []
@@ -996,7 +1106,33 @@ def main(cfg):
                 model.initial_state(batch_size=FLAGS.ttyrec_batch_size),
             )
             TTYREC_HIDDEN_STATE.append(hs)
-        TTYREC_ENVPOOL = make_ttyrec_envpool(tp, FLAGS)
+        TTYREC_ENVPOOL = make_ttyrec_envpool(tp, FLAGS.dataset, FLAGS)
+
+        # different strategies for score target
+        if FLAGS.score_target_strategy == "max":
+            score_target = np.max(list(TTYREC_ENVPOOL.dataset_scores.values()))
+        elif FLAGS.score_target_strategy == "mean":
+            score_target = np.mean(list(TTYREC_ENVPOOL.dataset_scores.values())) 
+        elif FLAGS.score_target_strategy == "percentile":
+            score_target = np.percentile(list(TTYREC_ENVPOOL.dataset_scores.values()), q=FLAGS.score_target_percentile)
+        elif FLAGS.score_target_strategy == "value":
+            score_target = FLAGS.score_target_value
+        else:
+            raise NotImplementedError
+    else:
+        score_target = 100000
+
+    if FLAGS.log_forgetting:
+        global FORGETTING_ENVPOOL, FORGETTING_HIDDEN_STATE
+        tp2 = concurrent.futures.ThreadPoolExecutor(max_workers=FLAGS.ttyrec_cpus)
+        FORGETTING_HIDDEN_STATE = []
+        for _ in range(FLAGS.ttyrec_envpool_size):
+            hs = nest.map(
+                lambda x: x.to(FLAGS.device),
+                model.initial_state(batch_size=FLAGS.ttyrec_batch_size),
+            )
+            FORGETTING_HIDDEN_STATE.append(hs)
+        FORGETTING_ENVPOOL = make_ttyrec_envpool(tp2, FLAGS.forgetting_dataset, FLAGS)
 
     # Run.
     now = time.time()
@@ -1007,11 +1143,20 @@ def main(cfg):
     last_reduce_stats = now
     is_leader = False
     is_connected = False
+    unfreezed = False
+    checkpoint_steps = -1
     while not terminate:
         prev_now = now
         now = time.time()
 
         steps = learner_state.global_stats["env_train_steps"].result()
+        if not unfreezed and steps > FLAGS.unfreeze_actor_steps:
+            if FLAGS.use_kickstarting or FLAGS.use_kickstarting_bc or FLAGS.log_forgetting:
+                hackrl.models.unfreeze(model.student)
+            else:
+                hackrl.models.unfreeze(model)
+            unfreezed = True
+
         if steps >= FLAGS.total_steps:
             logging.info("Stopping training after %i steps", steps)
             break
@@ -1089,18 +1234,14 @@ def main(cfg):
             ):
                 learner_state.last_checkpoint = learner_state.train_time
                 save_checkpoint(checkpoint_path, learner_state)
-            if (
-                learner_state.train_time - learner_state.last_checkpoint_history
-                >= FLAGS.checkpoint_history_interval
-            ):
-                learner_state.last_checkpoint_history = learner_state.train_time
-                save_checkpoint(
+            if steps // FLAGS.checkpoint_save_every > checkpoint_steps:
+                save_checkpoint(                
                     os.path.join(
-                        FLAGS.savedir,
-                        "checkpoint_v%d.tar" % learner_state.model_version,
-                    ),
-                    learner_state,
+                        FLAGS.savedir, "checkpoint_v%d" % ((steps // FLAGS.checkpoint_save_every) * FLAGS.checkpoint_save_every)
+                    ), 
+                    learner_state
                 )
+                checkpoint_steps = steps // FLAGS.checkpoint_save_every
 
         if accumulator.has_gradients():
             gradient_stats = accumulator.get_gradient_stats()
@@ -1120,8 +1261,7 @@ def main(cfg):
             next_env_index = (next_env_index + 1) % FLAGS.num_actor_batches
 
             env_state = env_states[cur_index]
-            if env_state.future is None:
-                env_state.future = envs.step(cur_index, env_state.prev_action)
+            env_state.future = envs.step(cur_index, env_state.prev_action)
             cpu_env_outputs = env_state.future.result()
 
             env_outputs = nest.map(
@@ -1129,6 +1269,10 @@ def main(cfg):
             )
 
             env_outputs["prev_action"] = env_state.prev_action
+            env_outputs["timesteps"] = env_state.timesteps
+            # env_outputs["max_scores"] = (torch.ones_like(env_state.timesteps) * score_target).float()
+            env_outputs["mask"] = torch.ones_like(env_state.timesteps).to(torch.bool)
+            env_outputs["scores"] = env_state.running_reward
             prev_core_state = env_state.core_state
             model.eval()
             with torch.no_grad():
@@ -1140,7 +1284,6 @@ def main(cfg):
             action = actor_outputs["action"]
             env_state.update(cpu_env_outputs, action, stats)
             del cpu_env_outputs  # envs.step invalidates cpu_env_outputs.
-            env_state.future = envs.step(cur_index, action)
 
             stats["env_act_steps"] += action.numel()
 
@@ -1162,9 +1305,19 @@ def main(cfg):
                 env_state.time_batcher.stack(last_data)
     if is_connected and is_leader:
         save_checkpoint(checkpoint_path, learner_state)
-    tp.shutdown()
+    if tp:
+        tp.shutdown()
+    if tp2:
+        tp2.shutdown()
     logging.info("Graceful exit. Bye bye!")
 
 
 if __name__ == "__main__":
-    main()
+    tempdir = tempfile.mkdtemp()
+    tempfile.tempdir = tempdir 
+
+    try:
+        main()
+    finally:
+        logging.info(f"Removing all temporary files in {tempfile.tempdir}")
+        shutil.rmtree(tempfile.tempdir)

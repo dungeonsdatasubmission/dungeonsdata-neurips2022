@@ -3,6 +3,7 @@ outputs/
 wandb/
 latest
 ttyrecs/ttyrecs.db
+/.vscode/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
